@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.build.json",
+  "ts-node": {
+    "ignore": [],
+    "include": ["src/**/*", "test-app/**/*"]
+  },
+  "ignore": [],
+  "include": ["src/**/*", "spec/**/*", "test-app/**/*"],
+  "compilerOptions": {
+    "types": ["jest", "@types/jest"]
+  }
+}
