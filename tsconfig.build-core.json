@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.build.json",
+  "ignore": [],
+  "include": ["src/**/*", "test-app/**/*"]
+}
