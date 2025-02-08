@@ -1,8 +1,10 @@
 import { closeAllDbConnections, compact, Dream, IdType, pascalize } from '@rvohealth/dream'
+import { PsychicApplication } from '@rvohealth/psychic'
 import { Job, JobsOptions, Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
 import Redis, { Cluster } from 'ioredis'
 import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName'
 import NoQueueForSpecifiedWorkstream from '../error/background/NoQueueForSpecifiedWorkstream'
+import EnvInternal from '../helpers/EnvInternal'
 import PsychicApplicationWorkers, {
   BullMQNativeWorkerOptions,
   PsychicBackgroundNativeBullMQOptions,
@@ -15,8 +17,6 @@ import PsychicApplicationWorkers, {
 import BaseBackgroundedService from './BaseBackgroundedService'
 import BaseScheduledService from './BaseScheduledService'
 import { Either } from './types'
-import { PsychicApplication } from '@rvohealth/psychic'
-import EnvInternal from '../helpers/EnvInternal'
 
 type JobTypes =
   | 'BackgroundJobQueueFunctionJob'

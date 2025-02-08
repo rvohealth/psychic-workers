@@ -7,7 +7,7 @@ import LastDummyServiceInNamedWorkstream from '../../../test-app/src/app/service
 import NotUrgentDummyService from '../../../test-app/src/app/services/NotUrgentDummyService'
 import UrgentDummyService from '../../../test-app/src/app/services/UrgentDummyService'
 
-describe('BackgroundedService', () => {
+describe('a backgrounded service', () => {
   describe('.background', () => {
     it('calls the static method, passing args', async () => {
       jest.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
@@ -44,6 +44,7 @@ describe('BackgroundedService', () => {
           constructorArgs: ['bottleawhiskey'],
         })
       }
+
       let serviceClass:
         | typeof DummyService
         | typeof UrgentDummyService

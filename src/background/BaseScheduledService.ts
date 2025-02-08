@@ -15,7 +15,7 @@ export default class BaseScheduledService {
   public static setGlobalName(globalName: string) {
     this._globalName = globalName
   }
-  public static _globalName: string | undefined
+  private static _globalName: string | undefined
 
   public static async schedule<
     T,

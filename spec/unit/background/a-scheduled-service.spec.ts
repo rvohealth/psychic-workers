@@ -7,7 +7,7 @@ import LastDummyScheduledService from '../../../test-app/src/app/services/LastDu
 import NotUrgentDummyScheduledService from '../../../test-app/src/app/services/NotUrgentDummyScheduledService'
 import UrgentDummyScheduledService from '../../../test-app/src/app/services/UrgentDummyScheduledService'
 
-describe('ScheduledService', () => {
+describe('a scheduled service', () => {
   context('queue priority', () => {
     const subject = async () => {
       await serviceClass.schedule('* * * * *', 'classRunInBg', 'bottlearum')

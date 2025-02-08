@@ -1,7 +1,7 @@
 import { GlobalNameNotSet } from '@rvohealth/dream'
 import { Job } from 'bullmq'
-import { FunctionPropertyNames } from './types'
 import background, { BackgroundJobConfig } from '.'
+import { FunctionPropertyNames } from './types'
 
 export default class BaseBackgroundedService {
   public static get backgroundJobConfig(): BackgroundJobConfig<BaseBackgroundedService> {
@@ -16,7 +16,7 @@ export default class BaseBackgroundedService {
   public static setGlobalName(globalName: string) {
     this._globalName = globalName
   }
-  public static _globalName: string | undefined
+  private static _globalName: string | undefined
 
   public static async background<
     T,
@@ -138,6 +138,6 @@ type OmitJobFromEndOfArguments<Original extends unknown[]> = Original extends [J
     : Original
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type BackgroundableMethodArgs<MethodFunc> = MethodFunc extends (...args: any) => any
+export type BackgroundableMethodArgs<MethodFunc> = MethodFunc extends (...args: any) => any
   ? OmitJobFromEndOfArguments<Parameters<MethodFunc>>
   : never
