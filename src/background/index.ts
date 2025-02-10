@@ -21,7 +21,6 @@ import { Either } from './types'
 type JobTypes =
   | 'BackgroundJobQueueFunctionJob'
   | 'BackgroundJobQueueStaticJob'
-  | 'BackgroundJobQueueInstanceJob'
   | 'BackgroundJobQueueModelInstanceJob'
 
 export interface BackgroundJobData {
@@ -29,8 +28,6 @@ export interface BackgroundJobData {
   method?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructorArgs?: any
   filepath?: string
   importKey?: string
   globalName?: string
@@ -561,47 +558,6 @@ export class Background {
     return queueInstance
   }
 
-  public async instanceMethod(
-    ObjectClass: Record<'name', string>,
-    method: string,
-    {
-      delaySeconds,
-      globalName,
-      args = [],
-      constructorArgs = [],
-      jobConfig = {},
-    }: {
-      globalName: string
-      delaySeconds?: number
-      filepath?: string
-      importKey?: string
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      args?: any[]
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      constructorArgs?: any[]
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jobConfig?: BackgroundJobConfig<any>
-    },
-  ) {
-    this.connect()
-
-    await this._addToQueue(
-      'BackgroundJobQueueInstanceJob',
-      {
-        globalName,
-        method,
-        args,
-        constructorArgs,
-      },
-      {
-        delaySeconds,
-        jobConfig: jobConfig,
-        groupId: this.jobConfigToGroupId(jobConfig),
-        priority: this.jobConfigToPriority(jobConfig),
-      },
-    )
-  }
-
   public async modelInstanceMethod(
     modelInstance: Dream,
     method: string,
@@ -733,7 +689,7 @@ export class Background {
   public async doWork(job: Job) {
     const jobType = job.name as JobTypes
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const { id, method, args, constructorArgs, globalName } = job.data as BackgroundJobData
+    const { id, method, args, globalName } = job.data as BackgroundJobData
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let objectClass: any
     let dreamClass: typeof Dream | undefined
@@ -749,21 +705,6 @@ export class Background {
 
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await objectClass[method!](...args, job)
-        break
-
-      case 'BackgroundJobQueueInstanceJob':
-        if (globalName) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          objectClass = PsychicApplication.lookupClassByGlobalName(globalName)
-        }
-
-        if (objectClass) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-          const instance = new objectClass(...constructorArgs)
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          await instance[method!](...args, job)
-        }
-
         break
 
       case 'BackgroundJobQueueModelInstanceJob':

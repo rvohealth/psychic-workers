@@ -10,40 +10,35 @@ import UrgentDummyService from '../../../test-app/src/app/services/UrgentDummySe
 describe('a backgrounded service', () => {
   describe('.background', () => {
     it('calls the static method, passing args', async () => {
-      jest.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
-      jest.spyOn(DummyService, 'classRunInBGWithJobArg').mockImplementation(async () => {})
+      const bgSpy = jest.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
+      const bgWithJobArgSpy = jest
+        .spyOn(DummyService, 'classRunInBGWithJobArg')
+        .mockImplementation(async () => {})
+
       await DummyService.background('classRunInBG', 'bottlearum')
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(DummyService.classRunInBG).toHaveBeenCalledWith('bottlearum', expect.any(Job))
+      expect(bgSpy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
 
       await DummyService.background('classRunInBGWithJobArg', 'bottlearum')
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(DummyService.classRunInBGWithJobArg).toHaveBeenCalledWith('bottlearum', expect.any(Job))
-    })
-  })
-
-  describe('#background', () => {
-    it('calls the instance method, passing constructor args to the constructor and args to the instance method', async () => {
-      jest.spyOn(DummyService.prototype, 'instanceMethodToTest').mockImplementation(async () => {})
-      await new DummyService('hello').background('instanceRunInBG', {
-        args: ['bottlearum'],
-        constructorArgs: ['bottleawhiskey'],
-      })
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(DummyService.prototype.instanceMethodToTest).toHaveBeenCalledWith(
-        'bottleawhiskey',
-        'bottlearum',
-        expect.any(Job),
-      )
+      expect(bgWithJobArgSpy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
     })
 
     context('queue priority', () => {
+      let spy: jest.SpyInstance
+
       const subject = async () => {
-        await new serviceClass('hello').background('instanceRunInBG', {
-          args: ['bottlearum'],
-          constructorArgs: ['bottleawhiskey'],
-        })
+        await serviceClass.background('classRunInBG', 'bottlearum')
       }
+
+      beforeEach(() => {
+        process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
+        background.connect()
+
+        spy = jest.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+      })
+
+      afterEach(() => {
+        process.env.REALLY_TEST_BACKGROUND_QUEUE = undefined
+      })
 
       let serviceClass:
         | typeof DummyService
@@ -52,30 +47,17 @@ describe('a backgrounded service', () => {
         | typeof LastDummyService
 
       function expectAddedToQueueWithPriority(priority: BackgroundQueuePriority, priorityLevel: number) {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        expect(background.queues[0].add).toHaveBeenCalledWith(
-          'BackgroundJobQueueInstanceJob',
+        expect(spy).toHaveBeenCalledWith(
+          'BackgroundJobQueueStaticJob',
           {
             globalName: `services/${serviceClass.name}`,
             args: ['bottlearum'],
-            constructorArgs: ['bottleawhiskey'],
             importKey: undefined,
-            method: 'instanceRunInBG',
+            method: 'classRunInBG',
           },
           { priority: priorityLevel },
         )
       }
-
-      beforeEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
-        background.connect()
-
-        jest.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
-      })
-
-      afterEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = undefined
-      })
 
       context('with a default priority', () => {
         beforeEach(() => {
@@ -126,7 +108,6 @@ describe('a backgrounded service', () => {
       beforeEach(() => {
         process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
         background.connect()
-        jest.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
       })
 
       afterEach(() => {
@@ -134,20 +115,16 @@ describe('a backgrounded service', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        await new LastDummyServiceInNamedWorkstream('hello').background('instanceRunInBG', {
-          args: ['bottlearum'],
-          constructorArgs: ['bottleawhiskey'],
-        })
+        const spy = jest.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        await LastDummyServiceInNamedWorkstream.background('classRunInBG', 'bottlearum')
 
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        expect(background.queues[1].add).toHaveBeenCalledWith(
-          'BackgroundJobQueueInstanceJob',
+        expect(spy).toHaveBeenCalledWith(
+          'BackgroundJobQueueStaticJob',
           {
             globalName: 'services/LastDummyServiceInNamedWorkstream',
             args: ['bottlearum'],
-            constructorArgs: ['bottleawhiskey'],
             importKey: undefined,
-            method: 'instanceRunInBG',
+            method: 'classRunInBG',
           },
           { group: { id: 'snazzy', priority: 4 } },
         )
@@ -157,36 +134,29 @@ describe('a backgrounded service', () => {
 
   describe('.backgroundWithDelay', () => {
     it('calls the static method, passing args', async () => {
-      jest.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
+      const spy = jest.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
       await DummyService.backgroundWithDelay(25, 'classRunInBG', 'bottlearum')
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(DummyService.classRunInBG).toHaveBeenCalledWith('bottlearum', expect.any(Job))
-    })
-  })
-
-  describe('#backgroundWithDelay', () => {
-    it('calls the instance method, passing constructor args to the constructor and args to the instance method', async () => {
-      jest.spyOn(DummyService.prototype, 'instanceMethodToTest').mockImplementation(async () => {})
-      await new DummyService('hello').backgroundWithDelay(15, 'instanceRunInBG', {
-        args: ['bottlearum'],
-        constructorArgs: ['bottleawhiskey'],
-      })
-
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      expect(DummyService.prototype.instanceMethodToTest).toHaveBeenCalledWith(
-        'bottleawhiskey',
-        'bottlearum',
-        expect.any(Job),
-      )
+      expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
     })
 
     context('queue priority', () => {
+      let spy: jest.SpyInstance
+
       const subject = async () => {
-        await new serviceClass('hello').backgroundWithDelay(7, 'instanceRunInBG', {
-          args: ['bottlearum'],
-          constructorArgs: ['bottleawhiskey'],
-        })
+        await serviceClass.backgroundWithDelay(7, 'classRunInBG', 'bottlearum')
       }
+
+      beforeEach(() => {
+        process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
+        background.connect()
+
+        spy = jest.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+      })
+
+      afterEach(() => {
+        process.env.REALLY_TEST_BACKGROUND_QUEUE = undefined
+      })
+
       let serviceClass:
         | typeof DummyService
         | typeof UrgentDummyService
@@ -194,30 +164,16 @@ describe('a backgrounded service', () => {
         | typeof LastDummyService
 
       function expectAddedToQueueWithPriority(priority: BackgroundQueuePriority, priorityLevel: number) {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        expect(background.queues[0].add).toHaveBeenCalledWith(
-          'BackgroundJobQueueInstanceJob',
+        expect(spy).toHaveBeenCalledWith(
+          'BackgroundJobQueueStaticJob',
           {
             globalName: `services/${serviceClass.name}`,
             args: ['bottlearum'],
-            constructorArgs: ['bottleawhiskey'],
-            importKey: undefined,
-            method: 'instanceRunInBG',
+            method: 'classRunInBG',
           },
           { delay: 7000, priority: priorityLevel },
         )
       }
-
-      beforeEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
-        background.connect()
-
-        jest.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
-      })
-
-      afterEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = undefined
-      })
 
       context('with a default priority', () => {
         beforeEach(() => {
@@ -268,7 +224,6 @@ describe('a backgrounded service', () => {
       beforeEach(() => {
         process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
         background.connect()
-        jest.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
       })
 
       afterEach(() => {
@@ -276,20 +231,16 @@ describe('a backgrounded service', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        await new LastDummyServiceInNamedWorkstream('hello').backgroundWithDelay(7, 'instanceRunInBG', {
-          args: ['bottlearum'],
-          constructorArgs: ['bottleawhiskey'],
-        })
+        const spy = jest.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        await LastDummyServiceInNamedWorkstream.backgroundWithDelay(7, 'classRunInBG', 'bottlearum')
 
-        // eslint-disable-next-line @typescript-eslint/unbound-method
-        expect(background.queues[1].add).toHaveBeenCalledWith(
-          'BackgroundJobQueueInstanceJob',
+        expect(spy).toHaveBeenCalledWith(
+          'BackgroundJobQueueStaticJob',
           {
             globalName: 'services/LastDummyServiceInNamedWorkstream',
             args: ['bottlearum'],
-            constructorArgs: ['bottleawhiskey'],
             importKey: undefined,
-            method: 'instanceRunInBG',
+            method: 'classRunInBG',
           },
           { delay: 7000, group: { id: 'snazzy', priority: 4 } },
         )

@@ -53,64 +53,6 @@ export default class BaseBackgroundedService {
   public get psychicTypes(): any {
     throw new Error('Must define psychicTypes getter in BackgroundedService class within your application')
   }
-
-  public async background<
-    T,
-    MethodName extends PsychicBackgroundedServiceInstanceMethods<T & BaseBackgroundedService>,
-    MethodFunc extends T[MethodName & keyof T],
-    MethodArgs extends BackgroundableMethodArgs<MethodFunc>,
-  >(
-    this: T,
-    methodName: MethodName,
-    {
-      args,
-      constructorArgs,
-    }: {
-      args?: MethodArgs
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      constructorArgs?: any[]
-    } = {},
-  ) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    const constructor = (this as any).constructor as typeof BaseBackgroundedService
-
-    return await background.instanceMethod(constructor, methodName, {
-      globalName: constructor.globalName,
-      args,
-      constructorArgs,
-      jobConfig: constructor.backgroundJobConfig,
-    })
-  }
-
-  public async backgroundWithDelay<
-    T,
-    MethodName extends PsychicBackgroundedServiceInstanceMethods<T & BaseBackgroundedService>,
-    MethodFunc extends T[MethodName & keyof T],
-    MethodArgs extends BackgroundableMethodArgs<MethodFunc>,
-  >(
-    this: T,
-    delaySeconds: number,
-    methodName: MethodName,
-    {
-      args,
-      constructorArgs,
-    }: {
-      args?: MethodArgs
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      constructorArgs?: any[]
-    } = {},
-  ) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-    const constructor = (this as any).constructor as typeof BaseBackgroundedService
-
-    return await background.instanceMethod(constructor, methodName, {
-      globalName: constructor.globalName,
-      delaySeconds,
-      args,
-      constructorArgs,
-      jobConfig: constructor.backgroundJobConfig,
-    })
-  }
 }
 
 export type PsychicBackgroundedServiceStaticMethods<T extends typeof BaseBackgroundedService> = Exclude<
