@@ -2,16 +2,17 @@ export {
   default as background,
   Background,
   BackgroundJobConfig,
-  stopBackgroundWorkers,
   BackgroundQueuePriority,
+  stopBackgroundWorkers,
 } from './background'
 
+export { default as BaseBackgroundedModel } from './background/BaseBackgroundedModel'
 export { default as BaseBackgroundedService } from './background/BaseBackgroundedService'
 export { default as BaseScheduledService } from './background/BaseScheduledService'
 
 export {
-  default as PsychicApplicationWorkers,
   BullMQNativeWorkerOptions,
+  default as PsychicApplicationWorkers,
   PsychicBackgroundNativeBullMQOptions,
   PsychicBackgroundSimpleOptions,
   PsychicBackgroundWorkstreamOptions,
