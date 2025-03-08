@@ -2,7 +2,7 @@
   "type": "module",
   "name": "@rvohealth/psychic-workers",
   "description": "Background job system for Psychic applications",
-  "version": "0.2.0-fgbeta-1",
+  "version": "0.2.0-fgbeta-2",
   "author": "RVOHealth",
   "repository": "https://github.com/rvohealth/psychic-workers.git",
   "license": "MIT",
