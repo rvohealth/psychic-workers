@@ -24,7 +24,7 @@
     "psy": "yarn psyts",
     "psyjs": "node ./dist/test-app/src/cli/index.js",
     "psyts": "npx ts-node --transpile-only -r ./test-app/src/conf/loadEnv.ts test-app/src/cli/index.ts",
-    "build": "rm -rf dist && echo \"building psychic app...\" && npx tsc -p ./tsconfig.build.json",
+    "build": "echo \"building cjs...\" && rm -rf dist && npx tsc -p ./tsconfig.cjs.build.json && echo \"building esm...\" && npx tsc -p ./tsconfig.esm.build.json",
     "uspec": "vitest --config ./spec/unit/vite.config.ts",
     "format": "yarn run prettier . --write",
     "lint": "yarn run eslint --no-warn-ignored \"src/**/*.ts\" && yarn run prettier . --check",
