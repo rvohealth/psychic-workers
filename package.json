@@ -1,11 +1,21 @@
 {
+  "type": "module",
   "name": "@rvohealth/psychic-workers",
   "description": "Background job system for Psychic applications",
-  "version": "0.1.1",
-  "main": "dist/src/index.js",
+  "version": "0.2.0-fgbeta-1",
   "author": "RVOHealth",
   "repository": "https://github.com/rvohealth/psychic-workers.git",
   "license": "MIT",
+  "main": "./dist/cjs/src/index.js",
+  "module": "./dist/esm/src/index.js",
+  "types": "./dist/types/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/src/index.d.ts",
+      "import": "./dist/esm/src/index.js",
+      "require": "./dist/cjs/src/index.js"
+    }
+  },
   "files": [
     "dist/**/*"
   ],
@@ -15,7 +25,7 @@
     "psyjs": "node ./dist/test-app/src/cli/index.js",
     "psyts": "npx ts-node --transpile-only -r ./test-app/src/conf/loadEnv.ts test-app/src/cli/index.ts",
     "build": "rm -rf dist && echo \"building psychic app...\" && npx tsc -p ./tsconfig.build.json",
-    "uspec": "jest --config=./spec/unit/jest.config.js --runInBand --forceExit",
+    "uspec": "vitest --config ./spec/unit/vite.config.ts",
     "format": "yarn run prettier . --write",
     "lint": "yarn run eslint --no-warn-ignored \"src/**/*.ts\" && yarn run prettier . --check",
     "prepack": "yarn build",
@@ -32,14 +42,12 @@
   },
   "devDependencies": {
     "@eslint/js": "=9.0.0",
-    "@jest-mock/express": "^2.1.0",
     "@rvohealth/dream": "^0.19.1",
     "@rvohealth/dream-spec-helpers": "^0.0.8",
     "@rvohealth/psychic": "^0.20.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "@socket.io/redis-emitter": "^5.1.0",
     "@types/express": "^4",
-    "@types/jest": "^29.5.12",
     "@types/luxon": "^3.4.2",
     "@types/node": "^22.5.1",
     "@types/pg": "^8",
@@ -48,8 +56,6 @@
     "eslint": "^9.9.1",
     "express": "^4.21.2",
     "ioredis": "^5.4.1",
-    "jest": "^29.7.0",
-    "jest-dev-server": "^11.0.0",
     "kysely": "^0.27.5",
     "kysely-codegen": "^0.17.0",
     "luxon": "^3.5.0",
@@ -58,12 +64,12 @@
     "socket.io": "^4.8.1",
     "socket.io-adapter": "^2.5.5",
     "supertest": "^7.0.0",
-    "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "tslib": "^2.7.0",
     "typedoc": "^0.26.6",
     "typescript": "^5.5.4",
-    "typescript-eslint": "=7.18.0"
+    "typescript-eslint": "=7.18.0",
+    "vitest": "^3.0.8"
   },
   "packageManager": "yarn@4.4.1"
 }

@@ -1,15 +1,15 @@
 // @ts-check
 
-const eslint = require('@eslint/js')
-const typescriptEslint = require('typescript-eslint')
-const typescriptParser = require('@typescript-eslint/parser')
+import eslint from '@eslint/js'
+import typescriptEslint from 'typescript-eslint'
+import typescriptParser from '@typescript-eslint/parser'
 
 const config = typescriptEslint.config(
   eslint.configs.recommended,
   ...typescriptEslint.configs.recommendedTypeChecked,
 
   {
-    ignores: ['spec/tmp/**/*', 'test-app/src/types/*', '.yarn/**/*', '.yarnrc.yml'],
+    ignores: ['docs/**/*', 'spec/tmp/**/*', 'test-app/src/types/*', '.yarn/**/*', '.yarnrc.yml'],
   },
 
   {
@@ -20,4 +20,5 @@ const config = typescriptEslint.config(
     },
   },
 )
-module.exports = config
+
+export default config

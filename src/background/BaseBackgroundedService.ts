@@ -1,7 +1,7 @@
 import { GlobalNameNotSet } from '@rvohealth/dream'
 import { Job } from 'bullmq'
-import background, { BackgroundJobConfig } from '.'
-import { FunctionPropertyNames } from './types'
+import background, { BackgroundJobConfig } from './index.js'
+import { FunctionPropertyNames } from './types.js'
 
 export default class BaseBackgroundedService {
   public static get backgroundJobConfig(): BackgroundJobConfig<BaseBackgroundedService> {

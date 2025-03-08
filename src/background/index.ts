@@ -2,9 +2,9 @@ import { closeAllDbConnections, compact, Dream, IdType, pascalize } from '@rvohe
 import { PsychicApplication } from '@rvohealth/psychic'
 import { Job, JobsOptions, Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
 import Redis, { Cluster } from 'ioredis'
-import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName'
-import NoQueueForSpecifiedWorkstream from '../error/background/NoQueueForSpecifiedWorkstream'
-import EnvInternal from '../helpers/EnvInternal'
+import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName.js'
+import NoQueueForSpecifiedWorkstream from '../error/background/NoQueueForSpecifiedWorkstream.js'
+import EnvInternal from '../helpers/EnvInternal.js'
 import PsychicApplicationWorkers, {
   BullMQNativeWorkerOptions,
   PsychicBackgroundNativeBullMQOptions,
@@ -13,10 +13,10 @@ import PsychicApplicationWorkers, {
   QueueOptionsWithConnectionInstance,
   RedisOrRedisClusterConnection,
   TransitionalPsychicBackgroundSimpleOptions,
-} from '../psychic-application-workers'
-import BaseBackgroundedService from './BaseBackgroundedService'
-import BaseScheduledService from './BaseScheduledService'
-import { Either } from './types'
+} from '../psychic-application-workers/index.js'
+import BaseBackgroundedService from './BaseBackgroundedService.js'
+import BaseScheduledService from './BaseScheduledService.js'
+import { Either } from './types.js'
 
 type JobTypes =
   | 'BackgroundJobQueueFunctionJob'
