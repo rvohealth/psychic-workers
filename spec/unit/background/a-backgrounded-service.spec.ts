@@ -1,4 +1,3 @@
-import { describe as context } from '@jest/globals'
 import { Job } from 'bullmq'
 import { background, BackgroundQueuePriority } from '../../../src'
 import DummyService from '../../../test-app/src/app/services/DummyService'
@@ -6,12 +5,13 @@ import LastDummyService from '../../../test-app/src/app/services/LastDummyServic
 import LastDummyServiceInNamedWorkstream from '../../../test-app/src/app/services/LastDummyServiceInNamedWorkstream'
 import NotUrgentDummyService from '../../../test-app/src/app/services/NotUrgentDummyService'
 import UrgentDummyService from '../../../test-app/src/app/services/UrgentDummyService'
+import { MockInstance } from 'vitest'
 
 describe('a backgrounded service', () => {
   describe('.background', () => {
     it('calls the static method, passing args', async () => {
-      const bgSpy = jest.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
-      const bgWithJobArgSpy = jest
+      const bgSpy = vi.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
+      const bgWithJobArgSpy = vi
         .spyOn(DummyService, 'classRunInBGWithJobArg')
         .mockImplementation(async () => {})
 
@@ -23,7 +23,7 @@ describe('a backgrounded service', () => {
     })
 
     context('queue priority', () => {
-      let spy: jest.SpyInstance
+      let spy: MockInstance
 
       const subject = async () => {
         await serviceClass.background('classRunInBG', 'bottlearum')
@@ -33,7 +33,7 @@ describe('a backgrounded service', () => {
         process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
         background.connect()
 
-        spy = jest.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+        spy = vi.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
       })
 
       afterEach(() => {
@@ -115,7 +115,7 @@ describe('a backgrounded service', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        const spy = jest.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
         await LastDummyServiceInNamedWorkstream.background('classRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith(
@@ -134,13 +134,13 @@ describe('a backgrounded service', () => {
 
   describe('.backgroundWithDelay', () => {
     it('calls the static method, passing args', async () => {
-      const spy = jest.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
+      const spy = vi.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
       await DummyService.backgroundWithDelay(25, 'classRunInBG', 'bottlearum')
       expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
     })
 
     context('queue priority', () => {
-      let spy: jest.SpyInstance
+      let spy: MockInstance
 
       const subject = async () => {
         await serviceClass.backgroundWithDelay(7, 'classRunInBG', 'bottlearum')
@@ -150,7 +150,7 @@ describe('a backgrounded service', () => {
         process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
         background.connect()
 
-        spy = jest.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+        spy = vi.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
       })
 
       afterEach(() => {
@@ -231,7 +231,7 @@ describe('a backgrounded service', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        const spy = jest.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
         await LastDummyServiceInNamedWorkstream.backgroundWithDelay(7, 'classRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith(

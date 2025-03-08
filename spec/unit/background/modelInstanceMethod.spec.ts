@@ -1,4 +1,3 @@
-import { describe as context } from '@jest/globals'
 import { Job } from 'bullmq'
 import { background, BackgroundQueuePriority } from '../../../src'
 import User from '../../../test-app/src/app/models/User'
@@ -8,7 +7,7 @@ describe('background (app singleton)', () => {
   describe('.modelInstanceMethod', () => {
     it('instantiates the model and calls the specified method with the specified args', async () => {
       const user = await createUser()
-      jest.spyOn(User.prototype, '_testBackground')
+      vi.spyOn(User.prototype, '_testBackground')
 
       await background.modelInstanceMethod(user, 'testBackground', {
         args: ['howyadoin'],
@@ -51,7 +50,7 @@ describe('background (app singleton)', () => {
       process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
       background.connect()
 
-      jest.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+      vi.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
     })
 
     afterEach(() => {
@@ -135,7 +134,7 @@ describe('background (app singleton)', () => {
       process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
       background.connect()
 
-      jest.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+      vi.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
     })
 
     afterEach(() => {

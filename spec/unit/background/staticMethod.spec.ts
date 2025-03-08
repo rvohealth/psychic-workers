@@ -1,4 +1,3 @@
-import { describe as context } from '@jest/globals'
 import { background, BackgroundQueuePriority } from '../../../src'
 import { Job } from 'bullmq'
 import DummyService from '../../../test-app/src/app/services/DummyService'
@@ -50,7 +49,7 @@ describe('background (app singleton)', () => {
         process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
         background.connect()
 
-        jest.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+        vi.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
       })
 
       afterEach(() => {
@@ -130,7 +129,7 @@ describe('background (app singleton)', () => {
         process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
         background.connect()
 
-        jest.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+        vi.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
       })
 
       afterEach(() => {
