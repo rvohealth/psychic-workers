@@ -1,7 +1,7 @@
-import { DreamColumn, DreamSerializers } from '@rvohealth/dream'
+import { DreamColumn, DreamSerializers } from '@rvoh/dream'
 import { Job } from 'bullmq'
-import fs from 'fs/promises'
-import path from 'path'
+import * as fs from 'fs/promises'
+import * as path from 'path'
 import { BackgroundJobConfig, PsychicApplicationWorkers } from '../../../../src'
 import ApplicationBackgroundedModel from './ApplicationBackgroundedModel'
 

@@ -1,4 +1,4 @@
-import { PsychicApplication } from '@rvohealth/psychic'
+import { PsychicApplication } from '@rvoh/psychic'
 import { Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
 import { Cluster, Redis } from 'ioredis'
 import background, { PsychicBackgroundOptions } from '../background/index.js'

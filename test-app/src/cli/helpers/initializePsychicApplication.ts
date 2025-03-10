@@ -3,7 +3,7 @@ import '../../conf/global'
 import psychicConf from '../../conf/app'
 import dreamConf from '../../conf/dream'
 import workersConf from '../../conf/workers'
-import { PsychicApplication, PsychicApplicationInitOptions } from '@rvohealth/psychic'
+import { PsychicApplication, PsychicApplicationInitOptions } from '@rvoh/psychic'
 import { PsychicApplicationWorkers } from '../../../../src'
 
 export default async function initializePsychicApplication(opts: PsychicApplicationInitOptions = {}) {

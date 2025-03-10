@@ -1,5 +1,5 @@
-import { closeAllDbConnections, compact, Dream, IdType, pascalize } from '@rvohealth/dream'
-import { PsychicApplication } from '@rvohealth/psychic'
+import { closeAllDbConnections, compact, Dream, IdType, pascalize } from '@rvoh/dream'
+import { PsychicApplication } from '@rvoh/psychic'
 import { Job, JobsOptions, Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
 import Redis, { Cluster } from 'ioredis'
 import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName.js'

@@ -1,4 +1,4 @@
-import { PsychicApplication } from '@rvohealth/psychic'
+import { PsychicApplication } from '@rvoh/psychic'
 import importDefault from '../app/helpers/importDefault'
 import srcPath from '../app/helpers/srcPath'
 import inflections from './inflections'
