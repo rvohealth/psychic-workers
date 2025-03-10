@@ -1,8 +1,8 @@
-import { Queue, QueueOptions, Worker } from 'bullmq'
-import { Cluster, Redis } from 'ioredis'
-import background, { PsychicBackgroundOptions } from '../background'
-import { cachePsychicWorkersApplication, getCachedPsychicWorkersApplicationOrFail } from './cache'
 import { PsychicApplication } from '@rvohealth/psychic'
+import { Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
+import { Cluster, Redis } from 'ioredis'
+import background, { PsychicBackgroundOptions } from '../background/index.js'
+import { cachePsychicWorkersApplication, getCachedPsychicWorkersApplicationOrFail } from './cache.js'
 
 export default class PsychicApplicationWorkers {
   public static async init(

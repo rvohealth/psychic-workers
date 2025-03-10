@@ -1,4 +1,3 @@
-import { describe as context } from '@jest/globals'
 import { Job } from 'bullmq'
 import { background, BackgroundQueuePriority } from '../../../src'
 import DefaultDummyScheduledService from '../../../test-app/src/app/services/DefaultDummyScheduledService'
@@ -43,7 +42,7 @@ describe('a scheduled service', () => {
       process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
       background.connect()
 
-      jest.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+      vi.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
     })
 
     afterEach(() => {

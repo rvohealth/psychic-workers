@@ -116,6 +116,7 @@ export const schema = {
       createdAt: {
         coercedType: {} as DateTime,
         enumType: null,
+        enumArrayType: null,
         enumValues: null,
         dbType: 'timestamp without time zone',
         allowNull: false,
@@ -124,6 +125,7 @@ export const schema = {
       email: {
         coercedType: {} as string | null,
         enumType: null,
+        enumArrayType: null,
         enumValues: null,
         dbType: 'character varying',
         allowNull: true,
@@ -132,6 +134,7 @@ export const schema = {
       id: {
         coercedType: {} as IdType,
         enumType: null,
+        enumArrayType: null,
         enumValues: null,
         dbType: 'bigint',
         allowNull: false,
@@ -140,6 +143,7 @@ export const schema = {
       updatedAt: {
         coercedType: {} as DateTime,
         enumType: null,
+        enumArrayType: null,
         enumValues: null,
         dbType: 'timestamp without time zone',
         allowNull: false,

@@ -1,25 +1,25 @@
 export {
   default as background,
   Background,
-  BackgroundJobConfig,
-  BackgroundQueuePriority,
+  type BackgroundJobConfig,
+  type BackgroundQueuePriority,
   stopBackgroundWorkers,
-} from './background'
+} from './background/index.js'
 
-export { default as BaseBackgroundedModel } from './background/BaseBackgroundedModel'
-export { default as BaseBackgroundedService } from './background/BaseBackgroundedService'
-export { default as BaseScheduledService } from './background/BaseScheduledService'
+export { default as BaseBackgroundedModel } from './background/BaseBackgroundedModel.js'
+export { default as BaseBackgroundedService } from './background/BaseBackgroundedService.js'
+export { default as BaseScheduledService } from './background/BaseScheduledService.js'
 
 export {
-  BullMQNativeWorkerOptions,
+  type BullMQNativeWorkerOptions,
   default as PsychicApplicationWorkers,
-  PsychicBackgroundNativeBullMQOptions,
-  PsychicBackgroundSimpleOptions,
-  PsychicBackgroundWorkstreamOptions,
-  QueueOptionsWithConnectionInstance,
-  RedisOrRedisClusterConnection,
-  TransitionalPsychicBackgroundSimpleOptions,
-} from './psychic-application-workers'
+  type PsychicBackgroundNativeBullMQOptions,
+  type PsychicBackgroundSimpleOptions,
+  type PsychicBackgroundWorkstreamOptions,
+  type QueueOptionsWithConnectionInstance,
+  type RedisOrRedisClusterConnection,
+  type TransitionalPsychicBackgroundSimpleOptions,
+} from './psychic-application-workers/index.js'
 
-export { default as NoQueueForSpecifiedQueueName } from './error/background/NoQueueForSpecifiedQueueName'
-export { default as NoQueueForSpecifiedWorkstream } from './error/background/NoQueueForSpecifiedWorkstream'
+export { default as NoQueueForSpecifiedQueueName } from './error/background/NoQueueForSpecifiedQueueName.js'
+export { default as NoQueueForSpecifiedWorkstream } from './error/background/NoQueueForSpecifiedWorkstream.js'

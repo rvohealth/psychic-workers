@@ -1,4 +1,3 @@
-import { describe as context } from '@jest/globals'
 import { Job } from 'bullmq'
 import { background } from '../../../src'
 import User from '../../../test-app/src/app/models/User'
@@ -6,8 +5,8 @@ import User from '../../../test-app/src/app/models/User'
 describe('a backgrounded model', () => {
   describe('.background', () => {
     it('calls the static method, passing args', async () => {
-      const bgSpy = jest.spyOn(User, 'classRunInBG').mockImplementation(async () => {})
-      const bgWithJobArgSpy = jest.spyOn(User, 'classRunInBGWithJobArg').mockImplementation(async () => {})
+      const bgSpy = vi.spyOn(User, 'classRunInBG').mockImplementation(async () => {})
+      const bgWithJobArgSpy = vi.spyOn(User, 'classRunInBGWithJobArg').mockImplementation(async () => {})
 
       await User.background('classRunInBG', 'bottlearum')
       expect(bgSpy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
@@ -35,7 +34,7 @@ describe('a backgrounded model', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        const spy = jest.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
         await User.background('classRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith(
@@ -56,7 +55,7 @@ describe('a backgrounded model', () => {
     beforeEach(async () => {})
 
     it('calls the instance method, passing args', async () => {
-      const spy = jest.spyOn(User.prototype, 'instanceMethodToTest').mockImplementation(async () => {})
+      const spy = vi.spyOn(User.prototype, 'instanceMethodToTest').mockImplementation(async () => {})
       const user = await User.create({ email: 'a@b.com' })
       await user.background('instanceRunInBG', 'bottlearum')
       expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
@@ -74,7 +73,7 @@ describe('a backgrounded model', () => {
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
         const user = await User.create({ email: 'a@b.com' })
-        const spy = jest.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
         await user.background('instanceRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith(
@@ -93,7 +92,7 @@ describe('a backgrounded model', () => {
 
   describe('.backgroundWithDelay', () => {
     it('calls the static method, passing args', async () => {
-      const spy = jest.spyOn(User, 'classRunInBG').mockImplementation(async () => {})
+      const spy = vi.spyOn(User, 'classRunInBG').mockImplementation(async () => {})
       await User.backgroundWithDelay(25, 'classRunInBG', 'bottlearum')
       expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
     })
@@ -109,7 +108,7 @@ describe('a backgrounded model', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        const spy = jest.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
         await User.backgroundWithDelay(15, 'classRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith(
@@ -129,7 +128,7 @@ describe('a backgrounded model', () => {
   describe('#backgroundWithDelay', () => {
     it('calls the instance method, passing args', async () => {
       const user = await User.create({ email: 'a@b.com' })
-      const spy = jest.spyOn(User.prototype, 'instanceMethodToTest').mockImplementation(async () => {})
+      const spy = vi.spyOn(User.prototype, 'instanceMethodToTest').mockImplementation(async () => {})
       await user.backgroundWithDelay(15, 'instanceRunInBG', 'bottlearum')
       expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
     })
@@ -153,7 +152,7 @@ describe('a backgrounded model', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        const spy = jest.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
         const user = await User.create({ email: 'a@b.com' })
 
         await user.backgroundWithDelay(7, 'instanceRunInBG', 'bottlearum')

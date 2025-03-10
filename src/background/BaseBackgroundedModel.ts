@@ -1,7 +1,7 @@
 import { Dream } from '@rvohealth/dream'
-import background, { BackgroundJobConfig } from '.'
-import { BackgroundableMethodArgs } from './BaseBackgroundedService'
-import { FunctionPropertyNames } from './types'
+import background, { BackgroundJobConfig } from './index.js'
+import { BackgroundableMethodArgs } from './BaseBackgroundedService.js'
+import { FunctionPropertyNames } from './types.js'
 
 export default class BaseBackgroundedModel extends Dream {
   public static get backgroundJobConfig(): BackgroundJobConfig<BaseBackgroundedModel> {
