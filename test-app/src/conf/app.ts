@@ -1,11 +1,11 @@
 import { PsychicApplication } from '@rvohealth/psychic'
+import importDefault from '../app/helpers/importDefault'
 import srcPath from '../app/helpers/srcPath'
-import importControllers from './importers/importControllers'
 import inflections from './inflections'
 import routesCb from './routes'
 
 export default async (psy: PsychicApplication) => {
-  psy.load('controllers', srcPath('app', 'controllers'), await importControllers())
+  await psy.load('controllers', srcPath('app', 'controllers'), path => importDefault(path))
 
   psy.set('appName', 'testapp')
   psy.set('apiOnly', false)
