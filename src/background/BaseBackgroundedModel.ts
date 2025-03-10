@@ -1,4 +1,4 @@
-import { Dream } from '@rvohealth/dream'
+import { Dream } from '@rvoh/dream'
 import background, { BackgroundJobConfig } from './index.js'
 import { BackgroundableMethodArgs } from './BaseBackgroundedService.js'
 import { FunctionPropertyNames } from './types.js'

@@ -1,8 +1,8 @@
 {
   "type": "module",
-  "name": "@rvohealth/psychic-workers",
+  "name": "@rvoh/psychic-workers",
   "description": "Background job system for Psychic applications",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "RVOHealth",
   "repository": "https://github.com/rvohealth/psychic-workers.git",
   "license": "MIT",
@@ -31,21 +31,18 @@
     "prepack": "yarn build",
     "dev-worker": "NODE_ENV=development WORKER_COUNT=1 ts-node --transpile-only ./test-app/worker.ts"
   },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
-  },
   "peerDependencies": {
-    "@rvohealth/dream": "*",
-    "@rvohealth/psychic": "*",
+    "@rvoh/dream": "*",
+    "@rvoh/psychic": "*",
     "bullmq": "*",
     "ioredis": "*"
   },
   "devDependencies": {
     "@eslint/js": "=9.0.0",
-    "@rvohealth/dream": "=0.29.0",
-    "@rvohealth/dream-spec-helpers": "=0.1.0",
-    "@rvohealth/psychic": "=0.24.0",
-    "@rvohealth/psychic-spec-helpers": "=0.2.0",
+    "@rvoh/dream": "^0.29.1",
+    "@rvoh/dream-spec-helpers": "^0.2.0",
+    "@rvoh/psychic": "^0.24.1",
+    "@rvoh/psychic-spec-helpers": "^0.3.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "@socket.io/redis-emitter": "^5.1.0",
     "@types/express": "^4",

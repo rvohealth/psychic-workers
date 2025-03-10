@@ -1,4 +1,4 @@
-import { GlobalNameNotSet } from '@rvohealth/dream'
+import { GlobalNameNotSet } from '@rvoh/dream'
 import { Job } from 'bullmq'
 import background, { BackgroundJobConfig } from './index.js'
 import { FunctionPropertyNames } from './types.js'
