@@ -616,9 +616,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@rvohealth/dream-spec-helpers@npm:=0.1.0-fgbeta-19":
-  version: 0.1.0-fgbeta-19
-  resolution: "@rvohealth/dream-spec-helpers@npm:0.1.0-fgbeta-19::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40rvohealth%2Fdream-spec-helpers%2F0.1.0-fgbeta-19%2F24cfc65ca6e1af3709ee2ff0e028d56f7e25abbd"
+"@rvohealth/dream-spec-helpers@npm:=0.1.0":
+  version: 0.1.0
+  resolution: "@rvohealth/dream-spec-helpers@npm:0.1.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40rvohealth%2Fdream-spec-helpers%2F0.1.0%2Fff165214987e7df2581d2943a06aecfdeffc8fb7"
   dependencies:
     lodash.sortby: "npm:^4.7.0"
   peerDependencies:
@@ -626,13 +626,13 @@ __metadata:
     "@types/pg": "*"
     pg: "*"
     ts-node: "*"
-  checksum: 10c0/de50b85d3660df7abb5901404c5be0c4838f0eea393c976d7c1e89cbf6bef4e0209da7147c58ded197a99de376ef206966ee429b9fde751317edb587abf1ac17
+  checksum: 10c0/511a354056da3878ff8f9497686832f85642af7fe917780e67393e5bbfa3b83869dd32306b95fc9b42a4b3c33bf9903bd942897373b9d9f9f80f911c3757a92a
   languageName: node
   linkType: hard
 
-"@rvohealth/dream@npm:=0.29.0-fgnewbeta-2":
-  version: 0.29.0-fgnewbeta-2
-  resolution: "@rvohealth/dream@npm:0.29.0-fgnewbeta-2::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40rvohealth%2Fdream%2F0.29.0-fgnewbeta-2%2F8f27e23017ca272a9e1da0ae7d5b677f003e3a8d"
+"@rvohealth/dream@npm:=0.29.0":
+  version: 0.29.0
+  resolution: "@rvohealth/dream@npm:0.29.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40rvohealth%2Fdream%2F0.29.0%2F74ebf491c85b4c3fa7b4bdd2118b160a595c1201"
   dependencies:
     colorette: "npm:^2.0.20"
     commander: "npm:^12.1.0"
@@ -649,13 +649,13 @@ __metadata:
     pg: "*"
   bin:
     dream: ./dist/src/global-cli/dream.js
-  checksum: 10c0/f8252231a5b091cf80e15cd2ff12ed64d60c36bbb1ef876dabff200eeb2a6cf7ece3957933fe50dde1fcedb8943163590ca279c8db3e72bb524b8ca5d1015761
+  checksum: 10c0/9d08e9137645d8a839b22540f8b0ba5b61b680cf1614c90ce1e7a776a400d635c0f1102bd4c55f97644f50f98e927946b87660e0a1d61e151972b86982e07cb7
   languageName: node
   linkType: hard
 
-"@rvohealth/psychic-spec-helpers@npm:=0.2.0-fgbeta-19":
-  version: 0.2.0-fgbeta-19
-  resolution: "@rvohealth/psychic-spec-helpers@npm:0.2.0-fgbeta-19::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40rvohealth%2Fpsychic-spec-helpers%2F0.2.0-fgbeta-19%2F7a05c81a21ce32762af2cf9e409fad340fc54ac6"
+"@rvohealth/psychic-spec-helpers@npm:=0.2.0":
+  version: 0.2.0
+  resolution: "@rvohealth/psychic-spec-helpers@npm:0.2.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40rvohealth%2Fpsychic-spec-helpers%2F0.2.0%2F6adba30a16900001d8d063f148e0c3267cd8f4ce"
   dependencies:
     cookiejar: "npm:^2.1.4"
   peerDependencies:
@@ -665,7 +665,7 @@ __metadata:
     supertest: "*"
     ts-node: "*"
     typescript: "*"
-  checksum: 10c0/0ac6add752fac00442bcf6035dc87cd19c0381b245f5566ea48823e010e38118887945bc9f4f75a0df48f4715f2a27f5f6a1db8e70cbd1afac90d5d9ae121c81
+  checksum: 10c0/e5d23eb6a7a5c1a750b305641d58266c361e6b78d4e843c51a6f6c2e904a10d6db48ef63c4c8766e8ef118e9f457fe82de8bd78f6173b36f23231a7e337dc096
   languageName: node
   linkType: hard
 
@@ -674,10 +674,10 @@ __metadata:
   resolution: "@rvohealth/psychic-workers@workspace:."
   dependencies:
     "@eslint/js": "npm:=9.0.0"
-    "@rvohealth/dream": "npm:=0.29.0-fgnewbeta-2"
-    "@rvohealth/dream-spec-helpers": "npm:=0.1.0-fgbeta-19"
-    "@rvohealth/psychic": "npm:=0.24.0-fgbeta-10"
-    "@rvohealth/psychic-spec-helpers": "npm:=0.2.0-fgbeta-19"
+    "@rvohealth/dream": "npm:=0.29.0"
+    "@rvohealth/dream-spec-helpers": "npm:=0.1.0"
+    "@rvohealth/psychic": "npm:=0.24.0"
+    "@rvohealth/psychic-spec-helpers": "npm:=0.2.0"
     "@socket.io/redis-adapter": "npm:^8.3.0"
     "@socket.io/redis-emitter": "npm:^5.1.0"
     "@types/express": "npm:^4"
@@ -712,9 +712,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@rvohealth/psychic@npm:=0.24.0-fgbeta-10":
-  version: 0.24.0-fgbeta-10
-  resolution: "@rvohealth/psychic@npm:0.24.0-fgbeta-10::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40rvohealth%2Fpsychic%2F0.24.0-fgbeta-10%2Ffd79dc341ad92fd2161e44b4e9f5a56fa981381f"
+"@rvohealth/psychic@npm:=0.24.0":
+  version: 0.24.0
+  resolution: "@rvohealth/psychic@npm:0.24.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40rvohealth%2Fpsychic%2F0.24.0%2F90364bf0b451e912d77a3189208cd88c437b87ba"
   dependencies:
     "@types/cookie-parser": "npm:^1.4.7"
     "@types/cors": "npm:^2.8.17"
@@ -735,7 +735,7 @@ __metadata:
     "@types/express": "*"
     commander: "*"
     express: "*"
-  checksum: 10c0/76a1e0904092055bdc3222b4e3384aac3362f8ba657b3eb431a875a6d10b9974fa813f6bfc25af8f0eec78b799d309e2ccb1b2cfdf7e06de5d3a1d74464af223
+  checksum: 10c0/764cf4d87351c5219550949bf69add0130d23f35f11346310ae29b30f085c6259216c7b4aa32b826f2ea74936ac2da2c07dc12310d0427bae7afb3e9d516d158
   languageName: node
   linkType: hard
 
