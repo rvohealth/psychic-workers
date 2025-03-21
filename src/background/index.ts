@@ -1,7 +1,7 @@
 import { closeAllDbConnections, compact, Dream, IdType, pascalize } from '@rvoh/dream'
 import { PsychicApplication } from '@rvoh/psychic'
 import { Job, JobsOptions, Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
-import Redis, { Cluster } from 'ioredis'
+import { Cluster, Redis } from 'ioredis'
 import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName.js'
 import NoQueueForSpecifiedWorkstream from '../error/background/NoQueueForSpecifiedWorkstream.js'
 import EnvInternal from '../helpers/EnvInternal.js'
