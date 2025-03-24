@@ -1,5 +1,5 @@
 import { UpdateableProperties } from '@rvoh/dream'
-import User from '../../src/app/models/User'
+import User from '../../src/app/models/User.js'
 
 let counter = 0
 

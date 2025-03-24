@@ -1,7 +1,7 @@
-import fs from 'fs/promises'
-import path from 'path'
-import { BackgroundJobConfig, PsychicApplicationWorkers } from '../../../../src'
-import ApplicationBackgroundedService from './ApplicationBackgroundedService'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { BackgroundJobConfig, PsychicApplicationWorkers } from '../../../../src/index.js'
+import ApplicationBackgroundedService from './ApplicationBackgroundedService.js'
 
 export default class UrgentDummyService extends ApplicationBackgroundedService {
   public static get backgroundJobConfig(): BackgroundJobConfig<ApplicationBackgroundedService> {

@@ -1,5 +1,5 @@
 import { Queue, Worker } from 'bullmq'
-import { Background, background } from '../../../src'
+import { Background, background } from '../../../src/index.js'
 
 describe('background (app singleton) initialization', () => {
   context('workers', () => {

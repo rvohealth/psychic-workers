@@ -1,7 +1,7 @@
-import { background, BackgroundQueuePriority } from '../../../src'
 import { Job } from 'bullmq'
-import DummyService from '../../../test-app/src/app/services/DummyService'
-import readTmpFile from '../../helpers/readTmpFile'
+import { background, BackgroundQueuePriority } from '../../../src/index.js'
+import DummyService from '../../../test-app/src/app/services/DummyService.js'
+import readTmpFile from '../../helpers/readTmpFile.js'
 
 describe('background (app singleton)', () => {
   describe('.staticMethod', () => {

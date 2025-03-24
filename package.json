@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "publish": "yarn npm publish",
-    "psy": "yarn psyts",
+    "psy": "NODE_ENV=${NODE_ENV:-test} yarn psyts",
     "psyjs": "node ./dist/test-app/src/cli/index.js",
     "psyts": "node --experimental-specifier-resolution=node --import ./bin/esm.js ./test-app/src/cli/index.ts",
     "build": "echo \"building cjs...\" && rm -rf dist && npx tsc -p ./tsconfig.cjs.build.json && echo \"building esm...\" && npx tsc -p ./tsconfig.esm.build.json",

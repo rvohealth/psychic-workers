@@ -1,6 +1,6 @@
-import fs from 'fs/promises'
-import path from 'path'
-import PsychicApplication from '../../src/psychic-application'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import PsychicApplication from '../../src/psychic-application.js'
 
 export default async function writeTmpFile(content: string) {
   const psychicApp = PsychicApplication.getOrFail()

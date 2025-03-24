@@ -1,10 +1,10 @@
-import '../../conf/global'
+import '../../conf/global.js'
 
-import psychicConf from '../../conf/app'
-import dreamConf from '../../conf/dream'
-import workersConf from '../../conf/workers'
 import { PsychicApplication, PsychicApplicationInitOptions } from '@rvoh/psychic'
-import { PsychicApplicationWorkers } from '../../../../src'
+import { PsychicApplicationWorkers } from '../../../../src/index.js'
+import psychicConf from '../../conf/app.js'
+import dreamConf from '../../conf/dream.js'
+import workersConf from '../../conf/workers.js'
 
 export default async function initializePsychicApplication(opts: PsychicApplicationInitOptions = {}) {
   const psychicApp = await PsychicApplication.init(psychicConf, dreamConf, opts)

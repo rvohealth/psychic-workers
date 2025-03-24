@@ -1,9 +1,9 @@
 import { DreamColumn, DreamSerializers } from '@rvoh/dream'
 import { Job } from 'bullmq'
-import * as fs from 'fs/promises'
-import * as path from 'path'
-import { BackgroundJobConfig, PsychicApplicationWorkers } from '../../../../src'
-import ApplicationBackgroundedModel from './ApplicationBackgroundedModel'
+import * as fs from 'node:fs/promises'
+import * as path from 'node:path'
+import { BackgroundJobConfig, PsychicApplicationWorkers } from '../../../../src/index.js'
+import ApplicationBackgroundedModel from './ApplicationBackgroundedModel.js'
 
 export default class User extends ApplicationBackgroundedModel {
   public get table() {
