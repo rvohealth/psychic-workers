@@ -1,5 +1,5 @@
-import BaseScheduledService from '../../../../src/background/BaseScheduledService'
-import psychicTypes from '../../types/psychic'
+import BaseScheduledService from '../../../../src/background/BaseScheduledService.js'
+import psychicTypes from '../../types/psychic.js'
 
 export default class ApplicationScheduledService extends BaseScheduledService {
   public get psychicTypes() {

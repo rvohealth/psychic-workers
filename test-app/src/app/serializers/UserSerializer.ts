@@ -1,5 +1,5 @@
 import { Attribute, DreamColumn, DreamSerializer } from '@rvoh/dream'
-import User from '../models/User'
+import User from '../models/User.js'
 
 export class UserSummarySerializer<DataType extends User, Passthrough extends object> extends DreamSerializer<
   DataType,

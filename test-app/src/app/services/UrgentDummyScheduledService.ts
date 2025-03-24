@@ -1,5 +1,5 @@
-import { BackgroundJobConfig } from '../../../../src'
-import ApplicationScheduledService from './ApplicationScheduledService'
+import { BackgroundJobConfig } from '../../../../src/index.js'
+import ApplicationScheduledService from './ApplicationScheduledService.js'
 
 export default class UrgentDummyScheduledService extends ApplicationScheduledService {
   public static get backgroundJobConfig(): BackgroundJobConfig<ApplicationScheduledService> {

@@ -1,11 +1,11 @@
 import { Job } from 'bullmq'
-import { background, BackgroundQueuePriority } from '../../../src'
-import DummyService from '../../../test-app/src/app/services/DummyService'
-import LastDummyService from '../../../test-app/src/app/services/LastDummyService'
-import LastDummyServiceInNamedWorkstream from '../../../test-app/src/app/services/LastDummyServiceInNamedWorkstream'
-import NotUrgentDummyService from '../../../test-app/src/app/services/NotUrgentDummyService'
-import UrgentDummyService from '../../../test-app/src/app/services/UrgentDummyService'
 import { MockInstance } from 'vitest'
+import { background, BackgroundQueuePriority } from '../../../src/index.js'
+import DummyService from '../../../test-app/src/app/services/DummyService.js'
+import LastDummyService from '../../../test-app/src/app/services/LastDummyService.js'
+import LastDummyServiceInNamedWorkstream from '../../../test-app/src/app/services/LastDummyServiceInNamedWorkstream.js'
+import NotUrgentDummyService from '../../../test-app/src/app/services/NotUrgentDummyService.js'
+import UrgentDummyService from '../../../test-app/src/app/services/UrgentDummyService.js'
 
 describe('a backgrounded service', () => {
   describe('.background', () => {

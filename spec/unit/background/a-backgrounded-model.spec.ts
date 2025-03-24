@@ -1,6 +1,6 @@
 import { Job } from 'bullmq'
-import { background } from '../../../src'
-import User from '../../../test-app/src/app/models/User'
+import { background } from '../../../src/index.js'
+import User from '../../../test-app/src/app/models/User.js'
 
 describe('a backgrounded model', () => {
   describe('.background', () => {

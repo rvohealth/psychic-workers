@@ -1,7 +1,7 @@
-import '../../../test-app/src/conf/loadEnv'
+import '../../../test-app/src/conf/loadEnv.js'
 
-import initializePsychicApplication from '../../../test-app/src/cli/helpers/initializePsychicApplication'
-import rmTmpFile from '../../helpers/rmTmpFile'
+import initializePsychicApplication from '../../../test-app/src/cli/helpers/initializePsychicApplication.js'
+import rmTmpFile from '../../helpers/rmTmpFile.js'
 
 export async function setup() {
   await initializePsychicApplication()

@@ -1,8 +1,8 @@
 import { Job } from 'bullmq'
-import fs from 'fs/promises'
-import path from 'path'
-import { PsychicApplicationWorkers } from '../../../../src'
-import ApplicationBackgroundedService from './ApplicationBackgroundedService'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { PsychicApplicationWorkers } from '../../../../src/index.js'
+import ApplicationBackgroundedService from './ApplicationBackgroundedService.js'
 
 export default class DummyService extends ApplicationBackgroundedService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

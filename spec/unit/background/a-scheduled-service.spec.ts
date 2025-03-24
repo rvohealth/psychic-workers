@@ -1,10 +1,10 @@
 import { Job } from 'bullmq'
-import { background, BackgroundQueuePriority } from '../../../src'
-import DefaultDummyScheduledService from '../../../test-app/src/app/services/DefaultDummyScheduledService'
-import DummyScheduledService from '../../../test-app/src/app/services/DummyScheduledService'
-import LastDummyScheduledService from '../../../test-app/src/app/services/LastDummyScheduledService'
-import NotUrgentDummyScheduledService from '../../../test-app/src/app/services/NotUrgentDummyScheduledService'
-import UrgentDummyScheduledService from '../../../test-app/src/app/services/UrgentDummyScheduledService'
+import { background, BackgroundQueuePriority } from '../../../src/index.js'
+import DefaultDummyScheduledService from '../../../test-app/src/app/services/DefaultDummyScheduledService.js'
+import DummyScheduledService from '../../../test-app/src/app/services/DummyScheduledService.js'
+import LastDummyScheduledService from '../../../test-app/src/app/services/LastDummyScheduledService.js'
+import NotUrgentDummyScheduledService from '../../../test-app/src/app/services/NotUrgentDummyScheduledService.js'
+import UrgentDummyScheduledService from '../../../test-app/src/app/services/UrgentDummyScheduledService.js'
 
 describe('a scheduled service', () => {
   context('queue priority', () => {

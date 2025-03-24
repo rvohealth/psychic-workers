@@ -1,7 +1,7 @@
 import { Job } from 'bullmq'
-import { background, BackgroundQueuePriority } from '../../../src'
-import User from '../../../test-app/src/app/models/User'
-import createUser from '../../../test-app/spec/factories/UserFactory'
+import { background, BackgroundQueuePriority } from '../../../src/index.js'
+import createUser from '../../../test-app/spec/factories/UserFactory.js'
+import User from '../../../test-app/src/app/models/User.js'
 
 describe('background (app singleton)', () => {
   describe('.modelInstanceMethod', () => {

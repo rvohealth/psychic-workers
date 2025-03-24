@@ -1,6 +1,6 @@
 import { Dream } from '@rvoh/dream'
-import background, { BackgroundJobConfig } from './index.js'
 import { BackgroundableMethodArgs } from './BaseBackgroundedService.js'
+import background, { BackgroundJobConfig } from './index.js'
 import { FunctionPropertyNames } from './types.js'
 
 export default class BaseBackgroundedModel extends Dream {
