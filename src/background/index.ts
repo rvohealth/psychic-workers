@@ -713,7 +713,7 @@ export class Background {
         }
 
         if (dreamClass) {
-          const modelInstance = await dreamClass.find(id)
+          const modelInstance = await dreamClass.connection('primary').find(id)
           if (!modelInstance) return
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
