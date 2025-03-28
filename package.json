@@ -2,7 +2,7 @@
   "type": "module",
   "name": "@rvoh/psychic-workers",
   "description": "Background job system for Psychic applications",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "author": "RVO Health",
   "repository": {
     "type": "git",
@@ -23,7 +23,6 @@
     "dist/**/*"
   ],
   "scripts": {
-    "publish": "yarn npm publish",
     "psy": "NODE_ENV=${NODE_ENV:-test} yarn psyts",
     "psyjs": "node ./dist/test-app/src/cli/index.js",
     "psyts": "node --experimental-specifier-resolution=node --import ./bin/esm.js ./test-app/src/cli/index.ts",
