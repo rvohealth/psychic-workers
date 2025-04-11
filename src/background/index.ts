@@ -1,7 +1,10 @@
-import { closeAllDbConnections, compact, Dream, IdType, pascalize } from '@rvoh/dream'
+import { closeAllDbConnections, compact, Dream, pascalize } from '@rvoh/dream'
 import { PsychicApp } from '@rvoh/psychic'
 import { Job, JobsOptions, Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
-import { Cluster, Redis } from 'ioredis'
+import ActivatingBackgroundWorkersWithoutDefaultWorkerConnection from '../error/background/ActivatingBackgroundWorkersWithoutDefaultWorkerConnection.js'
+import ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection from '../error/background/ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection.js'
+import DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
+import NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
 import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName.js'
 import NoQueueForSpecifiedWorkstream from '../error/background/NoQueueForSpecifiedWorkstream.js'
 import EnvInternal from '../helpers/EnvInternal.js'
@@ -14,112 +17,113 @@ import PsychicAppWorkers, {
   RedisOrRedisClusterConnection,
   TransitionalPsychicBackgroundSimpleOptions,
 } from '../psychic-app-workers/index.js'
-import BaseBackgroundedService from './BaseBackgroundedService.js'
-import BaseScheduledService from './BaseScheduledService.js'
-import { Either } from './types.js'
 
-type JobTypes =
-  | 'BackgroundJobQueueFunctionJob'
-  | 'BackgroundJobQueueStaticJob'
-  | 'BackgroundJobQueueModelInstanceJob'
+import {
+  BackgroundJobConfig,
+  BackgroundJobData,
+  BackgroundQueuePriority,
+  JobTypes,
+  QueueBackgroundJobConfig,
+  WorkstreamBackgroundJobConfig,
+} from '../types/background.js'
+import nameToRedisQueueName from './helpers/nameToRedisQueueName.js'
 
-export interface BackgroundJobData {
-  id?: IdType
-  method?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  args: any
-  filepath?: string
-  importKey?: string
-  globalName?: string
-}
-
-class DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection extends Error {
-  public get message() {
-    return `
-Native BullMQ options don't include a default queue connection, and the
-default config does not include a queue connection
-`
-  }
-}
-
-class NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection extends Error {
-  constructor(private queueName: string) {
-    super()
-  }
-
-  public get message() {
-    return `
-Native BullMQ options don't include a default queue connection, and the
-${this.queueName} queue does not include a queue connection
-`
-  }
-}
-
-class ActivatingBackgroundWorkersWithoutDefaultWorkerConnection extends Error {
-  public get message() {
-    return `
-defaultWorkerConnection is required when activating workers. For example,
-it may be omitted on webserver instances, but is required on worker instances.
-`
-  }
-}
-
-class ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection extends Error {
-  constructor(private queueName: string) {
-    super()
-  }
-
-  public get message() {
-    return `
-defaultWorkerConnection is missing, and the ${this.queueName} queue does not
-specify a workerConnection. A worker connection isrequired when activating workers.
-For example, it may be omitted on webserver instances, but is required on worker instances.
-`
-  }
-}
-
+/**
+ * the underlying class driving the `background` singleton,
+ * available as an import from `psychic-workers`.
+ */
 export class Background {
+  /**
+   * returns the default queue name for your app
+   */
   public static get defaultQueueName() {
     const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     return `${pascalize(psychicWorkersApp.psychicApp.appName)}BackgroundJobQueue`
   }
 
+  /**
+   * @internal
+   *
+   * returns the provided Worker class, or the Worker class from BullMQ
+   * if no override was provided. This is providable because BullMQ also
+   * offers a pro version, which requires you to provide custom classes.
+   */
   public static get Worker(): typeof Worker {
     const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     return (psychicWorkersApp.backgroundOptions.providers?.Worker || Worker) as typeof Worker
   }
 
+  /**
+   * @internal
+   *
+   * returns the provided Queue class, or the Queue class from BullMQ
+   * if no override was provided. This is providable because BullMQ also
+   * offers a pro version, which requires you to provide custom classes.
+   */
   public static get Queue(): typeof Queue {
     const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     return (psychicWorkersApp.backgroundOptions.providers?.Queue || Queue) as typeof Queue
   }
 
   /**
+   * @internal
+   *
    * Used when adding jobs to the default queue
    */
   private defaultQueue: Queue | null = null
+
   /**
+   * @internal
+   *
    * Used when adding jobs to the default transitional queue
    */
   private defaultTransitionalQueue: Queue | null = null
+
   /**
+   * @internal
+   *
    * Used when adding jobs to a named queue
    */
   private namedQueues: Record<string, Queue> = {}
 
+  /**
+   * @internal
+   *
+   * Used when adding grouped jobs
+   */
   private groupNames: Record<string, string[]> = {}
 
+  /**
+   * @internal
+   *
+   * Used when adding workstreams
+   */
   private workstreamNames: string[] = []
 
   /**
+   * @internal
+   *
    * Used when adding jobs to a named transitioanl queue
    */
   private namedTransitionalQueues: Record<string, Queue> = {}
 
+  /**
+   * @internal
+   *
+   * All of the workers that are currently registered
+   */
   private _workers: Worker[] = []
 
+  /**
+   * @internal
+   *
+   * All of the redis connections that are currently registered
+   */
   private redisConnections: RedisOrRedisClusterConnection[] = []
 
+  /**
+   * Establishes connection to BullMQ via redis
+   */
   public connect({
     activateWorkers = false,
   }: {
@@ -145,6 +149,9 @@ export class Background {
     }
   }
 
+  /**
+   * Returns all the queues in your application
+   */
   public get queues(): Queue[] {
     return compact([
       this.defaultQueue,
@@ -154,6 +161,9 @@ export class Background {
     ])
   }
 
+  /**
+   * Returns all the workers in your application
+   */
   public get workers() {
     return [...this._workers]
   }
@@ -163,6 +173,9 @@ export class Background {
     process.exit()
   }
 
+  /**
+   * Shuts down workers, closes all redis connections
+   */
   public async shutdown() {
     await Promise.all(this._workers.map(worker => worker.close()))
 
@@ -175,6 +188,9 @@ export class Background {
     await this.closeAllRedisConnections()
   }
 
+  /**
+   * closes all redis connections for workers and queues
+   */
   public async closeAllRedisConnections() {
     for (const queue of this.queues) {
       await queue.close()
@@ -193,6 +209,11 @@ export class Background {
     }
   }
 
+  /**
+   * @internal
+   *
+   * connects to BullMQ using workstream-based arguments
+   */
   private simpleConnect(
     defaultBullMQQueueOptions: Omit<QueueOptions, 'connection'>,
     backgroundOptions: PsychicBackgroundSimpleOptions | TransitionalPsychicBackgroundSimpleOptions,
@@ -326,6 +347,11 @@ export class Background {
     }
   }
 
+  /**
+   * @internal
+   *
+   * connects to BullMQ using native BullMQ arguments
+   */
   private nativeBullMQConnect(
     defaultBullMQQueueOptions: Omit<QueueOptions, 'connection'>,
     backgroundOptions: PsychicBackgroundNativeBullMQOptions,
@@ -440,6 +466,9 @@ export class Background {
     //////////////////////////////
   }
 
+  /**
+   * starts background workers
+   */
   public work() {
     this.connect({ activateWorkers: true })
 
@@ -456,21 +485,32 @@ export class Background {
     })
   }
 
+  /**
+   * adds the static method of a provided class to BullMQ
+   *
+   * @param ObjectClass - the class you wish to background
+   * @param method - the method you wish to background
+   * @param globalName - the globalName of the class you are processing
+   * @param args - (optional) a list of arguments to provide to your method when it is called
+   * @param delaySeconds - (optional) the number of seconds you wish to wait before allowing this job to process
+   * @param importKey - (optional) the import key for the class
+   * @param jobConfig - (optional) the background job config to use when backgrounding this method
+   */
   public async staticMethod(
     ObjectClass: Record<'name', string>,
     method: string,
     {
-      delaySeconds,
       globalName,
+      delaySeconds,
       args = [],
       jobConfig = {},
     }: {
       globalName: string
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      args?: any[]
       filepath?: string
       delaySeconds?: number
       importKey?: string
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      args?: any[]
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       jobConfig?: BackgroundJobConfig<any>
     },
@@ -486,13 +526,25 @@ export class Background {
       },
       {
         delaySeconds,
-        jobConfig: jobConfig,
+        jobConfig,
         groupId: this.jobConfigToGroupId(jobConfig),
         priority: this.jobConfigToPriority(jobConfig),
       },
     )
   }
 
+  /**
+   * adds the static method of a provided class to BullMQ,
+   * to be scheduled to run at a specified cron pattern
+   *
+   * @param ObjectClass - the class you wish to background
+   * @param pattern - the cron string you wish to use to govern the scheduling for this job
+   * @param method - the method you wish to background
+   * @param globalName - the globalName of the class you are processing
+   * @param args - (optional) a list of arguments to provide to your method when it is called
+   * @param importKey - (optional) the import key for the class
+   * @param jobConfig - (optional) the background job config to use when backgrounding this method
+   */
   public async scheduledMethod(
     ObjectClass: Record<'name', string>,
     pattern: string,
@@ -503,10 +555,10 @@ export class Background {
       jobConfig = {},
     }: {
       globalName: string
-      filepath?: string
-      importKey?: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       args?: any[]
+      filepath?: string
+      importKey?: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       jobConfig?: BackgroundJobConfig<any>
     },
@@ -562,6 +614,16 @@ export class Background {
     return queueInstance
   }
 
+  /**
+   * adds the instance method of a provided dream model to BullMQ
+   *
+   * @param modelInstance - the dream model instance you wish to background
+   * @param method - the method you wish to background
+   * @param globalName - the globalName of the class you are processing
+   * @param args - (optional) a list of arguments to provide to your method when it is called
+   * @param importKey - (optional) the import key for the class
+   * @param jobConfig - (optional) the background job config to use when backgrounding this method
+   */
   public async modelInstanceMethod(
     modelInstance: Dream,
     method: string,
@@ -590,7 +652,7 @@ export class Background {
       },
       {
         delaySeconds,
-        jobConfig: jobConfig,
+        jobConfig,
         groupId: this.jobConfigToGroupId(jobConfig),
         priority: this.jobConfigToPriority(jobConfig),
       },
@@ -733,54 +795,4 @@ export default background
 
 export async function stopBackgroundWorkers() {
   await background.shutdown()
-}
-
-export type BackgroundQueuePriority = 'default' | 'urgent' | 'not_urgent' | 'last'
-
-interface BaseBackgroundJobConfig {
-  priority?: BackgroundQueuePriority
-}
-
-export interface WorkstreamBackgroundJobConfig<T extends BaseScheduledService | BaseBackgroundedService>
-  extends BaseBackgroundJobConfig {
-  workstream?: T['psychicTypes']['workstreamNames'][number]
-}
-
-export interface QueueBackgroundJobConfig<
-  T extends BaseScheduledService | BaseBackgroundedService,
-  PsyTypes extends T['psychicTypes'] = T['psychicTypes'],
-  QueueGroupMap = PsyTypes['queueGroupMap'],
-  Queue extends keyof QueueGroupMap = keyof QueueGroupMap,
-  Groups extends QueueGroupMap[Queue] = QueueGroupMap[Queue],
-  GroupId = Groups[number & keyof Groups],
-> extends BaseBackgroundJobConfig {
-  groupId?: GroupId
-  queue?: Queue
-}
-
-export type BackgroundJobConfig<T extends BaseScheduledService | BaseBackgroundedService> = Either<
-  WorkstreamBackgroundJobConfig<T>,
-  QueueBackgroundJobConfig<T>
->
-
-export type PsychicBackgroundOptions =
-  | (PsychicBackgroundSimpleOptions &
-      Partial<
-        Record<
-          Exclude<keyof PsychicBackgroundNativeBullMQOptions, keyof PsychicBackgroundSimpleOptions>,
-          never
-        >
-      >)
-  | (PsychicBackgroundNativeBullMQOptions &
-      Partial<
-        Record<
-          Exclude<keyof PsychicBackgroundSimpleOptions, keyof PsychicBackgroundNativeBullMQOptions>,
-          never
-        >
-      >)
-
-function nameToRedisQueueName(queueName: string, redis: Redis | Cluster): string {
-  queueName = queueName.replace(/\{|\}/g, '')
-  if (redis instanceof Cluster) return `{${queueName}}`
-  return queueName
 }
