@@ -79,7 +79,10 @@ export default class PsychicApplicationWorkers {
     }
   }
 
-  public set<Opt extends PsychicWorkersApplicationOption>(option: Opt, value: unknown) {
+  public set<Opt extends PsychicWorkersApplicationOption>(
+    option: Opt,
+    value: Opt extends 'background' ? PsychicBackgroundOptions : unknown,
+  ) {
     switch (option) {
       case 'background':
         this._backgroundOptions = {
@@ -90,7 +93,7 @@ export default class PsychicApplicationWorkers {
             },
           },
 
-          ...(value as PsychicBackgroundOptions),
+          ...value,
         }
         break
 
