@@ -1,5 +1,5 @@
 import { Queue, Worker } from 'bullmq'
-import Redis from 'ioredis'
+import { Redis } from 'ioredis'
 import { PsychicApplicationWorkers } from '../../../src/index.js'
 
 export default (workersApp: PsychicApplicationWorkers) => {

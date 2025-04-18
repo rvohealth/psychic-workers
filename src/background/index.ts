@@ -243,7 +243,7 @@ export class Background {
       const workerCount = backgroundOptions.defaultWorkstream?.workerCount ?? 1
       for (let i = 0; i < workerCount; i++) {
         this._workers.push(
-          new Background.Worker(formattedQueueName, job => this.doWork(job), {
+          new Background.Worker(formattedQueueName, async job => await this.doWork(job), {
             connection: defaultWorkerConnection,
             concurrency: backgroundOptions.defaultWorkstream?.concurrency || 1,
           }),
