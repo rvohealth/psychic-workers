@@ -1,8 +1,9 @@
 import { PsychicApplication } from '@rvoh/psychic'
 import { Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
 import { Cluster, Redis } from 'ioredis'
-import background, { PsychicBackgroundOptions } from '../background/index.js'
+import background from '../background/index.js'
 import { cachePsychicWorkersApplication, getCachedPsychicWorkersApplicationOrFail } from './cache.js'
+import { PsychicBackgroundOptions } from '../types/background.js'
 
 export default class PsychicApplicationWorkers {
   public static async init(
@@ -78,7 +79,10 @@ export default class PsychicApplicationWorkers {
     }
   }
 
-  public set<Opt extends PsychicWorkersApplicationOption>(option: Opt, value: unknown) {
+  public set<Opt extends PsychicWorkersApplicationOption>(
+    option: Opt,
+    value: Opt extends 'background' ? PsychicBackgroundOptions : unknown,
+  ) {
     switch (option) {
       case 'background':
         this._backgroundOptions = {
@@ -89,7 +93,7 @@ export default class PsychicApplicationWorkers {
             },
           },
 
-          ...(value as PsychicBackgroundOptions),
+          ...value,
         }
         break
 
