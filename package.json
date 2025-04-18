@@ -2,7 +2,7 @@
   "type": "module",
   "name": "@rvoh/psychic-workers",
   "description": "Background job system for Psychic applications",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "author": "RVO Health",
   "repository": {
     "type": "git",

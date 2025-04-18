@@ -295,7 +295,7 @@ export class Background {
         const workerCount = namedWorkstream.workerCount ?? 1
         for (let i = 0; i < workerCount; i++) {
           this._workers.push(
-            new Background.Worker(namedWorkstreamFormattedQueueName, job => this.doWork(job), {
+            new Background.Worker(namedWorkstreamFormattedQueueName, async job => await this.doWork(job), {
               group: {
                 id: namedWorkstream.name,
                 limit: namedWorkstream.rateLimit,
