@@ -370,7 +370,7 @@ export class Background {
       const workerCount = nativeBullMQ.defaultWorkerCount ?? 1
       for (let i = 0; i < workerCount; i++) {
         this._workers.push(
-          new Background.Worker(formattedQueueName, job => this.doWork(job), {
+          new Background.Worker(formattedQueueName, async job => await this.doWork(job), {
             ...(backgroundOptions.nativeBullMQ.defaultWorkerOptions || {}),
             connection: defaultWorkerConnection,
           }),
@@ -424,7 +424,7 @@ export class Background {
 
         for (let i = 0; i < extraWorkerCount; i++) {
           this._workers.push(
-            new Background.Worker(formattedQueuename, job => this.doWork(job), {
+            new Background.Worker(formattedQueuename, async job => await this.doWork(job), {
               ...extraWorkerOptions,
               connection: namedWorkerConnection,
             }),
