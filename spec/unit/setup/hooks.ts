@@ -1,6 +1,6 @@
-import { DreamApplication } from '@rvoh/dream'
+import { DreamApp } from '@rvoh/dream'
 import { provideDreamViteMatchers, truncate } from '@rvoh/dream-spec-helpers'
-import initializePsychicApplication from '../../../test-app/src/cli/helpers/initializePsychicApplication.js'
+import initializePsychicApp from '../../../test-app/src/cli/helpers/initializePsychicApp.js'
 
 provideDreamViteMatchers()
 
@@ -16,11 +16,11 @@ provideDreamViteMatchers()
 
 beforeEach(async () => {
   try {
-    await initializePsychicApplication()
+    await initializePsychicApp()
   } catch (error) {
     console.error(error)
     throw error
   }
 
-  await truncate(DreamApplication)
+  await truncate(DreamApp)
 })

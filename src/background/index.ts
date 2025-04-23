@@ -1,5 +1,5 @@
 import { closeAllDbConnections, compact, Dream, IdType, pascalize } from '@rvoh/dream'
-import { PsychicApplication } from '@rvoh/psychic'
+import { PsychicApp } from '@rvoh/psychic'
 import { Job, JobsOptions, Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
 import { Cluster, Redis } from 'ioredis'
 import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName.js'
@@ -698,7 +698,7 @@ export class Background {
       case 'BackgroundJobQueueStaticJob':
         if (globalName) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          objectClass = PsychicApplication.lookupClassByGlobalName(globalName)
+          objectClass = PsychicApp.lookupClassByGlobalName(globalName)
         }
 
         if (!objectClass) return
@@ -709,7 +709,7 @@ export class Background {
 
       case 'BackgroundJobQueueModelInstanceJob':
         if (globalName) {
-          dreamClass = PsychicApplication.lookupClassByGlobalName(globalName) as typeof Dream | undefined
+          dreamClass = PsychicApp.lookupClassByGlobalName(globalName) as typeof Dream | undefined
         }
 
         if (dreamClass) {

@@ -1,10 +1,10 @@
-import { PsychicApplication } from '@rvoh/psychic'
+import { PsychicApp } from '@rvoh/psychic'
 import importDefault from '../app/helpers/importDefault.js'
 import srcPath from '../app/helpers/srcPath.js'
 import inflections from './inflections.js'
 import routesCb from './routes.js'
 
-export default async (psy: PsychicApplication) => {
+export default async (psy: PsychicApp) => {
   await psy.load('controllers', srcPath('app', 'controllers'), path => importDefault(path))
   await psy.load('services', srcPath('app', 'services'), path => importDefault(path))
 

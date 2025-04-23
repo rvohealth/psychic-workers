@@ -1,4 +1,4 @@
-import { PsychicApplication } from '@rvoh/psychic'
+import { PsychicApp } from '@rvoh/psychic'
 import { Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
 import { Cluster, Redis } from 'ioredis'
 import background, { PsychicBackgroundOptions } from '../background/index.js'
@@ -6,7 +6,7 @@ import { cachePsychicWorkersApplication, getCachedPsychicWorkersApplicationOrFai
 
 export default class PsychicApplicationWorkers {
   public static async init(
-    psychicApp: PsychicApplication,
+    psychicApp: PsychicApp,
     cb: (app: PsychicApplicationWorkers) => void | Promise<void>,
   ) {
     const psychicWorkersApp = new PsychicApplicationWorkers(psychicApp)
@@ -37,15 +37,15 @@ export default class PsychicApplicationWorkers {
    * Returns the cached psychic application if it has been set.
    * If it has not been set, an exception is raised.
    *
-   * The psychic application can be set by calling PsychicApplication#init
+   * The psychic application can be set by calling PsychicApp#init
    */
   public static getOrFail() {
     return getCachedPsychicWorkersApplicationOrFail()
   }
 
-  public psychicApp: PsychicApplication
+  public psychicApp: PsychicApp
 
-  constructor(psychicApp: PsychicApplication) {
+  constructor(psychicApp: PsychicApp) {
     this.psychicApp = psychicApp
   }
 
