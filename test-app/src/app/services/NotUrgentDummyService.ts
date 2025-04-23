@@ -12,6 +12,6 @@ export default class NotUrgentDummyService extends ApplicationBackgroundedServic
   public static async classRunInBG(arg: any) {
     const psychicWorkersApp = PsychicApplicationWorkers.getOrFail()
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    await fs.writeFile(path.join(psychicWorkersApp.psychicApp.apiRoot, 'spec/tmp.txt'), arg)
+    await fs.writeFile(path.join(psychicWorkersApp.psychicApp.apiRoot, 'spec', 'tmp.txt'), arg)
   }
 }
