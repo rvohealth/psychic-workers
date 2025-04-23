@@ -2,14 +2,11 @@ import { PsychicApp } from '@rvoh/psychic'
 import { Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
 import { Cluster, Redis } from 'ioredis'
 import background, { PsychicBackgroundOptions } from '../background/index.js'
-import { cachePsychicWorkersApplication, getCachedPsychicWorkersApplicationOrFail } from './cache.js'
+import { cachePsychicWorkersApp, getCachedPsychicWorkersAppOrFail } from './cache.js'
 
-export default class PsychicApplicationWorkers {
-  public static async init(
-    psychicApp: PsychicApp,
-    cb: (app: PsychicApplicationWorkers) => void | Promise<void>,
-  ) {
-    const psychicWorkersApp = new PsychicApplicationWorkers(psychicApp)
+export default class PsychicAppWorkers {
+  public static async init(psychicApp: PsychicApp, cb: (app: PsychicAppWorkers) => void | Promise<void>) {
+    const psychicWorkersApp = new PsychicAppWorkers(psychicApp)
 
     await cb(psychicWorkersApp)
 
@@ -28,7 +25,7 @@ export default class PsychicApplicationWorkers {
       await background.closeAllRedisConnections()
     })
 
-    cachePsychicWorkersApplication(psychicWorkersApp)
+    cachePsychicWorkersApp(psychicWorkersApp)
 
     return psychicWorkersApp
   }
@@ -40,7 +37,7 @@ export default class PsychicApplicationWorkers {
    * The psychic application can be set by calling PsychicApp#init
    */
   public static getOrFail() {
-    return getCachedPsychicWorkersApplicationOrFail()
+    return getCachedPsychicWorkersAppOrFail()
   }
 
   public psychicApp: PsychicApp
@@ -57,7 +54,7 @@ export default class PsychicApplicationWorkers {
   }
   private _backgroundOptions: PsychicBackgroundOptions
 
-  private _hooks: PsychicWorkersApplicationHooks = {
+  private _hooks: PsychicWorkersAppHooks = {
     workerShutdown: [],
   }
   public get hooks() {
@@ -74,11 +71,11 @@ export default class PsychicApplicationWorkers {
         break
 
       default:
-        throw new Error(`unrecognized event provided to PsychicWorkersApplication#on: ${hookEventType}`)
+        throw new Error(`unrecognized event provided to PsychicWorkersApp#on: ${hookEventType}`)
     }
   }
 
-  public set<Opt extends PsychicWorkersApplicationOption>(option: Opt, value: unknown) {
+  public set<Opt extends PsychicWorkersAppOption>(option: Opt, value: unknown) {
     switch (option) {
       case 'background':
         this._backgroundOptions = {
@@ -94,7 +91,7 @@ export default class PsychicApplicationWorkers {
         break
 
       default:
-        throw new Error(`Unhandled option type passed to PsychicWorkersApplication#set: ${option}`)
+        throw new Error(`Unhandled option type passed to PsychicWorkersApp#set: ${option}`)
     }
   }
 }
@@ -104,11 +101,11 @@ export interface PsychicWorkersTypeSync {
   queueGroupMap: Record<string, string[]>
 }
 
-export type PsychicWorkersApplicationOption = 'background'
+export type PsychicWorkersAppOption = 'background'
 
 export type PsychicWorkersHookEventType = 'workers:shutdown'
 
-export interface PsychicWorkersApplicationHooks {
+export interface PsychicWorkersAppHooks {
   workerShutdown: (() => void | Promise<void>)[]
 }
 

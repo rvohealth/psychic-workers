@@ -2,7 +2,7 @@ import { DreamColumn, DreamSerializers } from '@rvoh/dream'
 import { Job } from 'bullmq'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { BackgroundJobConfig, PsychicApplicationWorkers } from '../../../../src/index.js'
+import { BackgroundJobConfig, PsychicAppWorkers } from '../../../../src/index.js'
 import ApplicationBackgroundedModel from './ApplicationBackgroundedModel.js'
 
 export default class User extends ApplicationBackgroundedModel {
@@ -21,18 +21,18 @@ export default class User extends ApplicationBackgroundedModel {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public async instanceMethodToTest(b: any, job: Job) {
-    const psychicWorkersApp = PsychicApplicationWorkers.getOrFail()
+    const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     await fs.writeFile(path.join(psychicWorkersApp.psychicApp.apiRoot, 'spec', 'tmp.txt'), `${b},${job.name}`)
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public static async classRunInBG(arg: any) {
-    const psychicWorkersApp = PsychicApplicationWorkers.getOrFail()
+    const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     await fs.writeFile(path.join(psychicWorkersApp.psychicApp.apiRoot, 'spec', 'tmp.txt'), `${arg}`)
   }
 
   public static async classRunInBGWithJobArg(arg: 'bottlearum', job: Job) {
-    const psychicWorkersApp = PsychicApplicationWorkers.getOrFail()
+    const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     await fs.writeFile(
       path.join(psychicWorkersApp.psychicApp.apiRoot, 'spec', 'tmp.txt'),
       `${arg},${job.name}`,

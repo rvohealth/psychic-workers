@@ -2,7 +2,7 @@
   "type": "module",
   "name": "@rvoh/psychic-workers",
   "description": "Background job system for Psychic applications",
-  "version": "0.2.10",
+  "version": "0.3.0",
   "author": "RVO Health",
   "repository": {
     "type": "git",
@@ -23,17 +23,17 @@
     "dist/**/*"
   ],
   "scripts": {
-    "psy": "NODE_ENV=${NODE_ENV:-test} yarn psyts",
-    "psyjs": "node ./dist/test-app/src/cli/index.js",
-    "psyts": "node --experimental-specifier-resolution=node --import ./bin/esm.js ./test-app/src/cli/index.ts",
+    "psy": "NODE_ENV=${NODE_ENV:-test} yarn psy:ts",
+    "psy:js": "node ./dist/test-app/src/cli/index.js",
+    "psy:ts": "tsx ./test-app/src/cli/index.ts",
     "build": "echo \"building cjs...\" && rm -rf dist && npx tsc -p ./tsconfig.cjs.build.json && echo \"building esm...\" && npx tsc -p ./tsconfig.esm.build.json",
     "uspec": "vitest --config ./spec/unit/vite.config.ts",
     "format": "yarn run prettier . --write",
     "lint": "yarn run eslint --no-warn-ignored \"src/**/*.ts\" && yarn run prettier . --check",
     "console": "tsx ./src/conf/repl.ts",
-    "consolejs": "node ./dist/src/conf/repl.js",
+    "console:js": "node ./dist/src/conf/repl.js",
     "prepack": "yarn build",
-    "dev-worker": "NODE_ENV=development WORKER_COUNT=1 ts-node --transpile-only ./test-app/worker.ts"
+    "dev-worker": "NODE_ENV=development WORKER_COUNT=1 tsx ./test-app/worker.ts"
   },
   "peerDependencies": {
     "@rvoh/dream": "*",
@@ -43,10 +43,10 @@
   },
   "devDependencies": {
     "@eslint/js": "=9.0.0",
-    "@rvoh/dream": "^0.33.0",
-    "@rvoh/dream-spec-helpers": "^0.2.0",
-    "@rvoh/psychic": "^0.28.0",
-    "@rvoh/psychic-spec-helpers": "^0.3.0",
+    "@rvoh/dream": "^0.39.0",
+    "@rvoh/dream-spec-helpers": "^0.2.4",
+    "@rvoh/psychic": "^0.31.0",
+    "@rvoh/psychic-spec-helpers": "^0.6.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "@socket.io/redis-emitter": "^5.1.0",
     "@types/express": "^4",
@@ -65,8 +65,8 @@
     "socket.io": "^4.8.1",
     "socket.io-adapter": "^2.5.5",
     "supertest": "^7.0.0",
-    "ts-node": "^10.9.2",
     "tslib": "^2.7.0",
+    "tsx": "^4.19.3",
     "typedoc": "^0.26.6",
     "typescript": "^5.8.2",
     "typescript-eslint": "=7.18.0",

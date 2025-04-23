@@ -5,7 +5,7 @@ import { Cluster, Redis } from 'ioredis'
 import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName.js'
 import NoQueueForSpecifiedWorkstream from '../error/background/NoQueueForSpecifiedWorkstream.js'
 import EnvInternal from '../helpers/EnvInternal.js'
-import PsychicApplicationWorkers, {
+import PsychicAppWorkers, {
   BullMQNativeWorkerOptions,
   PsychicBackgroundNativeBullMQOptions,
   PsychicBackgroundSimpleOptions,
@@ -13,7 +13,7 @@ import PsychicApplicationWorkers, {
   QueueOptionsWithConnectionInstance,
   RedisOrRedisClusterConnection,
   TransitionalPsychicBackgroundSimpleOptions,
-} from '../psychic-application-workers/index.js'
+} from '../psychic-app-workers/index.js'
 import BaseBackgroundedService from './BaseBackgroundedService.js'
 import BaseScheduledService from './BaseScheduledService.js'
 import { Either } from './types.js'
@@ -80,17 +80,17 @@ For example, it may be omitted on webserver instances, but is required on worker
 
 export class Background {
   public static get defaultQueueName() {
-    const psychicWorkersApp = PsychicApplicationWorkers.getOrFail()
+    const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     return `${pascalize(psychicWorkersApp.psychicApp.appName)}BackgroundJobQueue`
   }
 
   public static get Worker(): typeof Worker {
-    const psychicWorkersApp = PsychicApplicationWorkers.getOrFail()
+    const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     return (psychicWorkersApp.backgroundOptions.providers?.Worker || Worker) as typeof Worker
   }
 
   public static get Queue(): typeof Queue {
-    const psychicWorkersApp = PsychicApplicationWorkers.getOrFail()
+    const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     return (psychicWorkersApp.backgroundOptions.providers?.Queue || Queue) as typeof Queue
   }
 
@@ -127,7 +127,7 @@ export class Background {
   } = {}) {
     if (this.defaultQueue) return
 
-    const psychicWorkersApp = PsychicApplicationWorkers.getOrFail()
+    const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     const defaultBullMQQueueOptions = psychicWorkersApp.backgroundOptions.defaultBullMQQueueOptions || {}
 
     if ((psychicWorkersApp.backgroundOptions as PsychicBackgroundNativeBullMQOptions).nativeBullMQ) {
@@ -166,7 +166,7 @@ export class Background {
   public async shutdown() {
     await Promise.all(this._workers.map(worker => worker.close()))
 
-    const psychicWorkersApp = PsychicApplicationWorkers.getOrFail()
+    const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     for (const hook of psychicWorkersApp.hooks.workerShutdown) {
       await hook()
     }
