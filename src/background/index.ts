@@ -445,10 +445,14 @@ export class Background {
 
     process.on('SIGTERM', () => {
       void this.shutdownAndExit()
+        .then(() => {})
+        .catch(() => {})
     })
 
     process.on('SIGINT', () => {
       void this.shutdownAndExit()
+        .then(() => {})
+        .catch(() => {})
     })
   }
 
