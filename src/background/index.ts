@@ -414,7 +414,8 @@ export class Background {
       nativeBullMQ.namedQueueOptions || {}
 
     Object.keys(namedQueueOptionsMap).forEach(queueName => {
-      const namedQueueOptions: QueueOptionsWithConnectionInstance = namedQueueOptionsMap[queueName]
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+      const namedQueueOptions: QueueOptionsWithConnectionInstance = namedQueueOptionsMap[queueName]!
 
       if (namedQueueOptions.queueConnection) this.redisConnections.push(namedQueueOptions.queueConnection)
       if (namedQueueOptions.workerConnection) this.redisConnections.push(namedQueueOptions.workerConnection)
@@ -438,11 +439,11 @@ export class Background {
       //////////////////////////
       const extraWorkerOptionsMap: Record<string, BullMQNativeWorkerOptions> =
         nativeBullMQ.namedQueueWorkers || {}
-      const extraWorkerOptions: BullMQNativeWorkerOptions = extraWorkerOptionsMap[queueName]
+      const extraWorkerOptions: BullMQNativeWorkerOptions | undefined = extraWorkerOptionsMap[queueName]
       const extraWorkerCount = extraWorkerOptions ? (extraWorkerOptions.workerCount ?? 1) : 0
 
       this.groupNames[queueName] ||= []
-      if (extraWorkerOptions.group?.id) this.groupNames[queueName].push(extraWorkerOptions.group.id)
+      if (extraWorkerOptions?.group?.id) this.groupNames[queueName].push(extraWorkerOptions.group.id)
 
       if (activateWorkers) {
         if (!namedWorkerConnection)
@@ -572,8 +573,10 @@ export class Background {
     //
     // See: https://docs.bullmq.io/guide/jobs/repeatable
     const jobId = `${ObjectClass.name}:${method}`
+    const queueInstance = this.queueInstance(jobConfig)
+    if (!queueInstance) throw new Error(`Missing queue for: ${jobConfig.queue?.toString()}`)
 
-    await this.queueInstance(jobConfig).add(
+    await queueInstance.add(
       'BackgroundJobQueueStaticJob',
       {
         globalName,
@@ -669,11 +672,11 @@ export class Background {
       priority,
       groupId,
     }: {
-      delaySeconds?: number
+      delaySeconds?: number | undefined
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       jobConfig: BackgroundJobConfig<any>
       priority: BackgroundQueuePriority
-      groupId?: string
+      groupId?: string | undefined
     },
   ) {
     // set this variable out side of the conditional so that
@@ -685,8 +688,13 @@ export class Background {
       const queue = new Background.Queue('TestQueue', { connection: {} })
       const job = new Job(queue, jobType, jobData, {})
       await this.doWork(job)
+      return
       //
-    } else if (groupId && priority) {
+    }
+
+    if (!queueInstance) throw new Error(`missing queue: ${jobConfig?.queue?.toString() || 'N/A'}`)
+
+    if (groupId && priority) {
       await queueInstance.add(jobType, jobData, {
         delay,
         group: {

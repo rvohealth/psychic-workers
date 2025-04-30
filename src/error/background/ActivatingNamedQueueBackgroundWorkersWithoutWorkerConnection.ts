@@ -3,7 +3,7 @@ export default class ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnectio
     super()
   }
 
-  public get message() {
+  public override get message() {
     return `
 defaultWorkerConnection is missing, and the ${this.queueName} queue does not
 specify a workerConnection. A worker connection isrequired when activating workers.
