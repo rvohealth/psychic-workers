@@ -3,7 +3,7 @@ export default class NoQueueForSpecifiedWorkstream extends Error {
     super()
   }
 
-  public get message() {
+  public override get message() {
     return `Error enqueueing background job
 No queue found for workstream "${this.workstream}"
 `

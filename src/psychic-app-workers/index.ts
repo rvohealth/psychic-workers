@@ -203,7 +203,7 @@ export type QueueOptionsWithConnectionInstance = Omit<QueueOptions, 'connection'
    * queue and worker connections.
    */
   queueConnection?: RedisOrRedisClusterConnection
-  workerConnection?: RedisOrRedisClusterConnection
+  workerConnection?: RedisOrRedisClusterConnection | undefined
 }
 
 export interface PsychicBackgroundSimpleOptions extends PsychicBackgroundSharedOptions {
@@ -215,7 +215,7 @@ export interface PsychicBackgroundSimpleOptions extends PsychicBackgroundSharedO
   /**
    * defaultWorkerConnection is only optional when workers will not be activated (e.g. on the webserver)
    */
-  defaultWorkerConnection?: RedisOrRedisClusterConnection
+  defaultWorkerConnection: RedisOrRedisClusterConnection | undefined
 
   /**
    * Every Psychic application that leverages simple background jobs will have a default
