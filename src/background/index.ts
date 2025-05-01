@@ -28,6 +28,8 @@ import {
 } from '../types/background.js'
 import nameToRedisQueueName from './helpers/nameToRedisQueueName.js'
 
+const DEFAULT_CONCURRENCY = 10
+
 /**
  * the underlying class driving the `background` singleton,
  * available as an import from `psychic-workers`.
@@ -170,15 +172,15 @@ export class Background {
 
   private async shutdownAndExit() {
     await this.shutdown()
-    process.exit()
+    // https://docs.bullmq.io/guide/going-to-production#gracefully-shut-down-workers
+    process.exit(0)
   }
 
   /**
    * Shuts down workers, closes all redis connections
    */
   public async shutdown() {
-    await Promise.all(this._workers.map(worker => worker.close()))
-
+    PsychicAppWorkers.getOrFail().psychicApp.logger.info(`[psychic-workers] shutdown`)
     const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     for (const hook of psychicWorkersApp.hooks.workerShutdown) {
       await hook()
@@ -192,20 +194,14 @@ export class Background {
    * closes all redis connections for workers and queues
    */
   public async closeAllRedisConnections() {
-    for (const queue of this.queues) {
-      await queue.close()
-    }
+    PsychicAppWorkers.getOrFail().psychicApp.logger.info(`[psychic-workers] closeAllRedisConnections`)
 
     for (const worker of this.workers) {
       await worker.close()
     }
 
     for (const connection of this.redisConnections) {
-      try {
-        connection.disconnect()
-      } catch {
-        // noop
-      }
+      await connection.quit()
     }
   }
 
@@ -266,7 +262,7 @@ export class Background {
         this._workers.push(
           new Background.Worker(formattedQueueName, async job => await this.doWork(job), {
             connection: defaultWorkerConnection,
-            concurrency: backgroundOptions.defaultWorkstream?.concurrency || 1,
+            concurrency: backgroundOptions.defaultWorkstream?.concurrency || DEFAULT_CONCURRENCY,
           }),
         )
       }
@@ -322,7 +318,7 @@ export class Background {
                 limit: namedWorkstream.rateLimit,
               },
               connection: namedWorkstreamWorkerConnection,
-              concurrency: namedWorkstream.concurrency || 1,
+              concurrency: namedWorkstream.concurrency || DEFAULT_CONCURRENCY,
               // explicitly typing as WorkerOptions because Psychic can't be aware of BullMQ Pro options
             } as WorkerOptions),
           )
@@ -474,12 +470,16 @@ export class Background {
     this.connect({ activateWorkers: true })
 
     process.on('SIGTERM', () => {
+      PsychicAppWorkers.getOrFail().psychicApp.logger.info('[psychic-workers] handle SIGTERM')
+
       void this.shutdownAndExit()
         .then(() => {})
         .catch(() => {})
     })
 
     process.on('SIGINT', () => {
+      PsychicAppWorkers.getOrFail().psychicApp.logger.info('[psychic-workers] handle SIGINT')
+
       void this.shutdownAndExit()
         .then(() => {})
         .catch(() => {})
@@ -503,6 +503,7 @@ export class Background {
     {
       globalName,
       delaySeconds,
+      jobId,
       args = [],
       jobConfig = {},
     }: {
@@ -511,6 +512,7 @@ export class Background {
       args?: any[]
       filepath?: string
       delaySeconds?: number
+      jobId?: string | undefined
       importKey?: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       jobConfig?: BackgroundJobConfig<any>
@@ -527,6 +529,7 @@ export class Background {
       },
       {
         delaySeconds,
+        jobId,
         jobConfig,
         groupId: this.jobConfigToGroupId(jobConfig),
         priority: this.jobConfigToPriority(jobConfig),
@@ -632,10 +635,12 @@ export class Background {
     method: string,
     {
       delaySeconds,
+      jobId,
       args = [],
       jobConfig = {},
     }: {
       delaySeconds?: number
+      jobId?: string | undefined
       importKey?: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       args?: any[]
@@ -655,6 +660,7 @@ export class Background {
       },
       {
         delaySeconds,
+        jobId,
         jobConfig,
         groupId: this.jobConfigToGroupId(jobConfig),
         priority: this.jobConfigToPriority(jobConfig),
@@ -668,11 +674,13 @@ export class Background {
     jobData: BackgroundJobData,
     {
       delaySeconds,
+      jobId,
       jobConfig,
       priority,
       groupId,
     }: {
       delaySeconds?: number | undefined
+      jobId?: string | undefined
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       jobConfig: BackgroundJobConfig<any>
       priority: BackgroundQueuePriority
@@ -682,6 +690,9 @@ export class Background {
     // set this variable out side of the conditional so that
     // mismatches will raise exceptions even in tests
     const queueInstance = this.queueInstance(jobConfig)
+
+    // if delaySeconds is 0, we will intentionally treat
+    // this as `undefined`
     const delay = delaySeconds ? delaySeconds * 1000 : undefined
 
     if (EnvInternal.isTest && !EnvInternal.boolean('REALLY_TEST_BACKGROUND_QUEUE')) {
@@ -697,6 +708,7 @@ export class Background {
     if (groupId && priority) {
       await queueInstance.add(jobType, jobData, {
         delay,
+        jobId,
         group: {
           ...this.groupIdToGroupConfig(groupId),
           priority: this.mapPriorityWordToPriorityNumber(priority),
@@ -707,6 +719,7 @@ export class Background {
     } else {
       await queueInstance.add(jobType, jobData, {
         delay,
+        jobId,
         group: this.groupIdToGroupConfig(groupId),
         priority: this.mapPriorityWordToPriorityNumber(priority),
         // explicitly typing as JobsOptions because Psychic can't be aware of BullMQ Pro options

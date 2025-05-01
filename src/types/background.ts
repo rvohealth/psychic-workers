@@ -41,6 +41,22 @@ export interface BackgroundJobData {
   globalName?: string
 }
 
+export type DelayedJobOpts = DelayedJobDuration & {
+  /**
+   * a unique identifier for your job. this identifier will be
+   * used to debounce, leveraging the internal throttling mechanisms
+   * provided by BullMQ
+   */
+  jobId?: string
+}
+
+export interface DelayedJobDuration {
+  seconds?: number
+  minutes?: number
+  hours?: number
+  days?: number
+}
+
 export type JobTypes =
   | 'BackgroundJobQueueFunctionJob'
   | 'BackgroundJobQueueStaticJob'

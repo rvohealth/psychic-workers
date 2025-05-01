@@ -1,8 +1,9 @@
 import { GlobalNameNotSet } from '@rvoh/dream'
 import { Job } from 'bullmq'
-import { BackgroundJobConfig } from '../types/background.js'
+import { BackgroundJobConfig, DelayedJobOpts } from '../types/background.js'
 import { FunctionPropertyNames } from '../types/utils.js'
 import background from './index.js'
+import durationToSeconds from '../helpers/durationToSeconds.js'
 
 export default class BaseBackgroundedService {
   /**
@@ -104,12 +105,13 @@ export default class BaseBackgroundedService {
     MethodName extends PsychicBackgroundedServiceStaticMethods<T & typeof BaseBackgroundedService>,
     MethodFunc extends T[MethodName & keyof T],
     MethodArgs extends BackgroundableMethodArgs<MethodFunc>,
-  >(this: T, delaySeconds: number, methodName: MethodName, ...args: MethodArgs) {
+  >(this: T, delay: DelayedJobOpts, methodName: MethodName, ...args: MethodArgs) {
     const safeThis: typeof BaseBackgroundedService = this as typeof BaseBackgroundedService
 
     return await background.staticMethod(safeThis, methodName, {
       globalName: safeThis.globalName,
-      delaySeconds,
+      delaySeconds: durationToSeconds(delay),
+      jobId: delay.jobId,
       args,
       jobConfig: safeThis.backgroundJobConfig,
     })

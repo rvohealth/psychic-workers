@@ -34,7 +34,7 @@ describe('a backgrounded model', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         await User.background('classRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith(
@@ -73,7 +73,7 @@ describe('a backgrounded model', () => {
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
         const user = await User.create({ email: 'a@b.com' })
-        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         await user.background('instanceRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith(
@@ -93,7 +93,7 @@ describe('a backgrounded model', () => {
   describe('.backgroundWithDelay', () => {
     it('calls the static method, passing args', async () => {
       const spy = vi.spyOn(User, 'classRunInBG').mockImplementation(async () => {})
-      await User.backgroundWithDelay(25, 'classRunInBG', 'bottlearum')
+      await User.backgroundWithDelay({ seconds: 25 }, 'classRunInBG', 'bottlearum')
       expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
     })
 
@@ -108,8 +108,8 @@ describe('a backgrounded model', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
-        await User.backgroundWithDelay(15, 'classRunInBG', 'bottlearum')
+        const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
+        await User.backgroundWithDelay({ seconds: 15, jobId: 'myjob' }, 'classRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith(
           'BackgroundJobQueueStaticJob',
@@ -119,7 +119,7 @@ describe('a backgrounded model', () => {
             importKey: undefined,
             method: 'classRunInBG',
           },
-          { delay: 15000, group: { id: 'snazzy', priority: 1 } },
+          { delay: 15000, jobId: 'myjob', group: { id: 'snazzy', priority: 1 } },
         )
       })
     })
@@ -129,7 +129,7 @@ describe('a backgrounded model', () => {
     it('calls the instance method, passing args', async () => {
       const user = await User.create({ email: 'a@b.com' })
       const spy = vi.spyOn(User.prototype, 'instanceMethodToTest').mockImplementation(async () => {})
-      await user.backgroundWithDelay(15, 'instanceRunInBG', 'bottlearum')
+      await user.backgroundWithDelay({ seconds: 15, jobId: 'myjob' }, 'instanceRunInBG', 'bottlearum')
       expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
     })
 
@@ -137,7 +137,9 @@ describe('a backgrounded model', () => {
       it('does not throw an error', async () => {
         const user = await User.create({ email: 'a@b.com' })
         await user.destroy()
-        await expect(user.backgroundWithDelay(15, 'instanceRunInBG', 'bottlearum')).resolves.not.toThrow()
+        await expect(
+          user.backgroundWithDelay({ seconds: 15, jobId: 'myjob' }, 'instanceRunInBG', 'bottlearum'),
+        ).resolves.not.toThrow()
       })
     })
 
@@ -152,10 +154,10 @@ describe('a backgrounded model', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         const user = await User.create({ email: 'a@b.com' })
 
-        await user.backgroundWithDelay(7, 'instanceRunInBG', 'bottlearum')
+        await user.backgroundWithDelay({ seconds: 7, jobId: 'myjob' }, 'instanceRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith(
           'BackgroundJobQueueModelInstanceJob',
@@ -165,7 +167,7 @@ describe('a backgrounded model', () => {
             id: user.id,
             method: 'instanceRunInBG',
           },
-          { delay: 7000, group: { id: 'snazzy', priority: 1 } },
+          { delay: 7000, jobId: 'myjob', group: { id: 'snazzy', priority: 1 } },
         )
       })
     })

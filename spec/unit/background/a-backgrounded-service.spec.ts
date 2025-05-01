@@ -33,7 +33,7 @@ describe('a backgrounded service', () => {
         process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
         background.connect()
 
-        spy = vi.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+        spy = vi.spyOn(background.queues[0]!, 'add').mockResolvedValue({} as Job)
       })
 
       afterEach(() => {
@@ -115,7 +115,7 @@ describe('a backgrounded service', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
+        const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         await LastDummyServiceInNamedWorkstream.background('classRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith(
@@ -135,7 +135,7 @@ describe('a backgrounded service', () => {
   describe('.backgroundWithDelay', () => {
     it('calls the static method, passing args', async () => {
       const spy = vi.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
-      await DummyService.backgroundWithDelay(25, 'classRunInBG', 'bottlearum')
+      await DummyService.backgroundWithDelay({ seconds: 25, jobId: 'myjob' }, 'classRunInBG', 'bottlearum')
       expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
     })
 
@@ -143,14 +143,14 @@ describe('a backgrounded service', () => {
       let spy: MockInstance
 
       const subject = async () => {
-        await serviceClass.backgroundWithDelay(7, 'classRunInBG', 'bottlearum')
+        await serviceClass.backgroundWithDelay({ seconds: 7, jobId: 'myjob' }, 'classRunInBG', 'bottlearum')
       }
 
       beforeEach(() => {
         process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
         background.connect()
 
-        spy = vi.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+        spy = vi.spyOn(background.queues[0]!, 'add').mockResolvedValue({} as Job)
       })
 
       afterEach(() => {
@@ -171,7 +171,7 @@ describe('a backgrounded service', () => {
             args: ['bottlearum'],
             method: 'classRunInBG',
           },
-          { delay: 7000, priority: priorityLevel },
+          { delay: 7000, jobId: 'myjob', priority: priorityLevel },
         )
       }
 
@@ -231,8 +231,12 @@ describe('a backgrounded service', () => {
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
-        const spy = vi.spyOn(background.queues[1], 'add').mockResolvedValue({} as Job)
-        await LastDummyServiceInNamedWorkstream.backgroundWithDelay(7, 'classRunInBG', 'bottlearum')
+        const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
+        await LastDummyServiceInNamedWorkstream.backgroundWithDelay(
+          { seconds: 7, jobId: 'myjob' },
+          'classRunInBG',
+          'bottlearum',
+        )
 
         expect(spy).toHaveBeenCalledWith(
           'BackgroundJobQueueStaticJob',
@@ -242,7 +246,7 @@ describe('a backgrounded service', () => {
             importKey: undefined,
             method: 'classRunInBG',
           },
-          { delay: 7000, group: { id: 'snazzy', priority: 4 } },
+          { delay: 7000, jobId: 'myjob', group: { id: 'snazzy', priority: 4 } },
         )
       })
     })
