@@ -1,8 +1,9 @@
 import { Dream } from '@rvoh/dream'
-import { BackgroundJobConfig } from '../types/background.js'
+import { BackgroundJobConfig, DelayedJobOpts } from '../types/background.js'
 import { FunctionPropertyNames } from '../types/utils.js'
 import { BackgroundableMethodArgs } from './BaseBackgroundedService.js'
 import background from './index.js'
+import durationToSeconds from '../helpers/durationToSeconds.js'
 
 export default class BaseBackgroundedModel extends Dream {
   /**
@@ -92,12 +93,13 @@ export default class BaseBackgroundedModel extends Dream {
     MethodName extends PsychicBackgroundedModelStaticMethods<T & typeof BaseBackgroundedModel>,
     MethodFunc extends T[MethodName & keyof T],
     MethodArgs extends BackgroundableMethodArgs<MethodFunc>,
-  >(this: T, delaySeconds: number, methodName: MethodName, ...args: MethodArgs) {
+  >(this: T, delay: DelayedJobOpts, methodName: MethodName, ...args: MethodArgs) {
     const safeThis: typeof BaseBackgroundedModel = this as typeof BaseBackgroundedModel
 
     return await background.staticMethod(safeThis, methodName, {
       globalName: safeThis.globalName,
-      delaySeconds,
+      delaySeconds: durationToSeconds(delay),
+      jobId: delay.jobId,
       args,
       jobConfig: safeThis.backgroundJobConfig,
     })
@@ -174,12 +176,13 @@ export default class BaseBackgroundedModel extends Dream {
     MethodName extends PsychicBackgroundedServiceInstanceMethods<T & BaseBackgroundedModel>,
     MethodFunc extends T[MethodName & keyof T],
     MethodArgs extends BackgroundableMethodArgs<MethodFunc>,
-  >(this: T, delaySeconds: number, methodName: MethodName, ...args: MethodArgs) {
+  >(this: T, delay: DelayedJobOpts, methodName: MethodName, ...args: MethodArgs) {
     const safeThis: BaseBackgroundedModel = this as BaseBackgroundedModel
 
     return await background.modelInstanceMethod(safeThis, methodName, {
       args,
-      delaySeconds,
+      delaySeconds: durationToSeconds(delay),
+      jobId: delay.jobId,
       jobConfig: safeThis.backgroundJobConfig,
     })
   }
