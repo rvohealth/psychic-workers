@@ -2,7 +2,7 @@
   "type": "module",
   "name": "@rvoh/psychic-workers",
   "description": "Background job system for Psychic applications",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "author": "RVO Health",
   "repository": {
     "type": "git",
@@ -53,7 +53,7 @@
     "@types/node": "^22.5.1",
     "@types/pg": "^8",
     "@types/supertest": "^6.0.2",
-    "bullmq": "^5.49.1",
+    "bullmq": "^5.52.0",
     "eslint": "^9.9.1",
     "express": "^4.21.2",
     "ioredis": "^5.4.1",

@@ -415,7 +415,6 @@ export class Background {
       nativeBullMQ.namedQueueOptions || {}
 
     Object.keys(namedQueueOptionsMap).forEach(queueName => {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
       const namedQueueOptions: QueueOptionsWithConnectionInstance = namedQueueOptionsMap[queueName]!
 
       if (namedQueueOptions.queueConnection) this.redisConnections.push(namedQueueOptions.queueConnection)
@@ -472,7 +471,13 @@ export class Background {
    * starts background workers
    */
   public work() {
-    this.connect({ activateWorkers: true })
+    process.on('uncaughtException', (error: Error) => {
+      PsychicApp.log('[psychic-workers] uncaughtException:', error)
+    })
+
+    process.on('unhandledRejection', (error: Error) => {
+      PsychicApp.log('[psychic-workers] unhandledRejection:', error)
+    })
 
     process.on('SIGTERM', () => {
       if (!EnvInternal.isTest) PsychicApp.log('[psychic-workers] handle SIGTERM')
@@ -489,6 +494,8 @@ export class Background {
         .then(() => {})
         .catch(() => {})
     })
+
+    this.connect({ activateWorkers: true })
   }
 
   /**

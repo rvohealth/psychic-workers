@@ -829,7 +829,7 @@ __metadata:
     "@types/node": "npm:^22.5.1"
     "@types/pg": "npm:^8"
     "@types/supertest": "npm:^6.0.2"
-    bullmq: "npm:^5.49.1"
+    bullmq: "npm:^5.52.0"
     eslint: "npm:^9.9.1"
     express: "npm:^4.21.2"
     ioredis: "npm:^5.4.1"
@@ -1672,9 +1672,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bullmq@npm:^5.49.1":
-  version: 5.49.1
-  resolution: "bullmq@npm:5.49.1"
+"bullmq@npm:^5.52.0":
+  version: 5.52.0
+  resolution: "bullmq@npm:5.52.0"
   dependencies:
     cron-parser: "npm:^4.9.0"
     ioredis: "npm:^5.4.1"
@@ -1683,7 +1683,7 @@ __metadata:
     semver: "npm:^7.5.4"
     tslib: "npm:^2.0.0"
     uuid: "npm:^9.0.0"
-  checksum: 10c0/a5ce6037d612c34eae37f49dc9f372918764428dd4cf8b075810afccb57ab3afd9b14b273da7607bbaa922350c511715f6402e70e0ad21fa8014477220c602c3
+  checksum: 10c0/4adc3743bc099bf59d58e94d67e6676297f61dbfdca1d498f9ffcee250b44def2f5ad998a353b389b80cb66b312ca607a3ef2c09b72b53ba8582f363aeebf549
   languageName: node
   linkType: hard
 
