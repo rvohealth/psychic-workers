@@ -180,7 +180,7 @@ export class Background {
    * Shuts down workers, closes all redis connections
    */
   public async shutdown() {
-    PsychicAppWorkers.getOrFail().psychicApp.logger.info(`[psychic-workers] shutdown`)
+    if (!EnvInternal.isTest) PsychicApp.log(`[psychic-workers] shutdown`)
     const psychicWorkersApp = PsychicAppWorkers.getOrFail()
     for (const hook of psychicWorkersApp.hooks.workerShutdown) {
       await hook()
@@ -194,14 +194,19 @@ export class Background {
    * closes all redis connections for workers and queues
    */
   public async closeAllRedisConnections() {
-    PsychicAppWorkers.getOrFail().psychicApp.logger.info(`[psychic-workers] closeAllRedisConnections`)
+    if (!EnvInternal.isTest) PsychicApp.log(`[psychic-workers] closeAllRedisConnections`)
 
     for (const worker of this.workers) {
       await worker.close()
     }
 
     for (const connection of this.redisConnections) {
-      await connection.quit()
+      try {
+        await connection.quit()
+      } catch (error) {
+        if (!EnvInternal.isTest)
+          PsychicApp.logWithLevel('error', `[psychic-workers] error quitting Redis:`, error)
+      }
     }
   }
 
@@ -470,7 +475,7 @@ export class Background {
     this.connect({ activateWorkers: true })
 
     process.on('SIGTERM', () => {
-      PsychicAppWorkers.getOrFail().psychicApp.logger.info('[psychic-workers] handle SIGTERM')
+      if (!EnvInternal.isTest) PsychicApp.log('[psychic-workers] handle SIGTERM')
 
       void this.shutdownAndExit()
         .then(() => {})
@@ -478,7 +483,7 @@ export class Background {
     })
 
     process.on('SIGINT', () => {
-      PsychicAppWorkers.getOrFail().psychicApp.logger.info('[psychic-workers] handle SIGINT')
+      if (!EnvInternal.isTest) PsychicApp.log('[psychic-workers] handle SIGINT')
 
       void this.shutdownAndExit()
         .then(() => {})
