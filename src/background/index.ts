@@ -1,6 +1,14 @@
 import { closeAllDbConnections, compact, Dream, pascalize } from '@rvoh/dream'
 import { PsychicApp } from '@rvoh/psychic'
-import { Job, JobsOptions, Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
+import {
+  Job,
+  JobSchedulerTemplateOptions,
+  JobsOptions,
+  Queue,
+  QueueOptions,
+  Worker,
+  WorkerOptions,
+} from 'bullmq'
 import ActivatingBackgroundWorkersWithoutDefaultWorkerConnection from '../error/background/ActivatingBackgroundWorkersWithoutDefaultWorkerConnection.js'
 import ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection from '../error/background/ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection.js'
 import DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
@@ -569,14 +577,14 @@ export class Background {
       globalName,
       args = [],
       jobConfig = {},
+      scheduleOpts = {},
     }: {
       globalName: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       args?: any[]
-      filepath?: string
-      importKey?: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       jobConfig?: BackgroundJobConfig<any>
+      scheduleOpts?: JobSchedulerTemplateOptions
     },
   ) {
     this.connect()
@@ -587,26 +595,23 @@ export class Background {
     // now be enforced by combining class name, method name, and cron repeat pattern.
     //
     // See: https://docs.bullmq.io/guide/jobs/repeatable
-    const jobId = `${ObjectClass.name}:${method}`
+    const schedulerId = `${globalName}:${method}`
     const queueInstance = this.queueInstance(jobConfig)
     if (!queueInstance) throw new Error(`Missing queue for: ${jobConfig.queue?.toString()}`)
 
-    await queueInstance.add(
-      'BackgroundJobQueueStaticJob',
+    await queueInstance.upsertJobScheduler(
+      schedulerId,
+      { pattern },
       {
-        globalName,
-        method,
-        args,
-      },
-      {
-        repeat: {
-          pattern,
+        name: schedulerId,
+        opts: scheduleOpts,
+
+        data: {
+          globalName,
+          method,
+          args,
         },
-        jobId,
-        group: this.jobConfigToGroup(jobConfig),
-        priority: this.mapPriorityWordToPriorityNumber(this.jobConfigToPriority(jobConfig)),
-        // explicitly typing as JobsOptions because Psychic can't be aware of BullMQ Pro options
-      } as JobsOptions,
+      },
     )
   }
 
