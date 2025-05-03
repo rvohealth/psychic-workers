@@ -66,6 +66,8 @@ export type BackgroundQueuePriority = 'default' | 'urgent' | 'not_urgent' | 'las
 
 interface BaseBackgroundJobConfig {
   priority?: BackgroundQueuePriority
+  // TODO: accept T generic, if BaseScheduledService,
+  // add 'scheduleOpts?: JobSchedulerTemplateOptions'
 }
 
 export interface WorkstreamBackgroundJobConfig<T extends BaseScheduledService | BaseBackgroundedService>
