@@ -28,7 +28,7 @@ describe('a scheduled service', () => {
         scheduledId,
         { pattern: '* * * * *' },
         {
-          name: scheduledId,
+          name: 'BackgroundJobQueueStaticJob',
           opts: {},
           data: {
             globalName: `services/${serviceClass.name}`,

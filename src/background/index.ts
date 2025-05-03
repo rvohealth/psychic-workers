@@ -603,7 +603,7 @@ export class Background {
       schedulerId,
       { pattern },
       {
-        name: schedulerId,
+        name: 'BackgroundJobQueueStaticJob',
         opts: scheduleOpts,
 
         data: {
