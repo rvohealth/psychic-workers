@@ -2,7 +2,7 @@ import BaseScheduledService from '../../../../src/background/BaseScheduledServic
 import psychicTypes from '../../types/psychic.js'
 
 export default class ApplicationScheduledService extends BaseScheduledService {
-  public get psychicTypes() {
+  public override get psychicTypes() {
     return psychicTypes
   }
 

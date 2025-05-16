@@ -1,9 +1,9 @@
 import { GlobalNameNotSet } from '@rvoh/dream'
 import { Job } from 'bullmq'
+import durationToSeconds from '../helpers/durationToSeconds.js'
 import { BackgroundJobConfig, DelayedJobOpts } from '../types/background.js'
 import { FunctionPropertyNames } from '../types/utils.js'
 import background from './index.js'
-import durationToSeconds from '../helpers/durationToSeconds.js'
 
 export default class BaseBackgroundedService {
   /**

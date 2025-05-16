@@ -79,7 +79,7 @@ export interface QueueBackgroundJobConfig<
   T extends BaseScheduledService | BaseBackgroundedService,
   PsyTypes extends T['psychicTypes'] = T['psychicTypes'],
   QueueGroupMap = PsyTypes['queueGroupMap'],
-  Queue extends keyof QueueGroupMap = keyof QueueGroupMap,
+  Queue extends keyof QueueGroupMap & string = keyof QueueGroupMap & string,
   Groups extends QueueGroupMap[Queue] = QueueGroupMap[Queue],
   GroupId = Groups[number & keyof Groups],
 > extends BaseBackgroundJobConfig {
