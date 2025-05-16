@@ -8,6 +8,8 @@ export default async function configureDream(app: DreamApp) {
   app.set('primaryKeyType', 'bigserial')
   app.set('inflections', inflections)
 
+  app.set('parallelTests', Number(process.env.DREAM_PARALLEL_TESTS || '0'))
+
   await app.load('models', srcPath('app', 'models'), path => importDefault(path))
   await app.load('serializers', srcPath('app', 'serializers'), path => importAll(path))
 

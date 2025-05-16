@@ -8,6 +8,7 @@ import DummyScheduledService from '../../../../test-app/src/app/services/DummySc
 import DummyService from '../../../../test-app/src/app/services/DummyService.js'
 import LastDummyServiceInNamedWorkstream from '../../../../test-app/src/app/services/LastDummyServiceInNamedWorkstream.js'
 import UrgentDummyService from '../../../../test-app/src/app/services/UrgentDummyService.js'
+import parallelTestSafeQueueName from '../../../../src/background/helpers/parallelTestSafeQueueName.js'
 
 describe('.work', () => {
   let originalTestInvocation: PsychicWorkersAppTestInvocationType
@@ -81,10 +82,10 @@ describe('.work', () => {
         await DummyScheduledService.schedule('0 * * * *', 'classRunInBg', 'message 1')
         expect(scheduledSpy).not.toHaveBeenCalled()
 
-        await WorkerTestUtils.workScheduled({ queue: 'snazzy' })
+        await WorkerTestUtils.workScheduled({ queue: parallelTestSafeQueueName('snazzy') })
         expect(scheduledSpy).not.toHaveBeenCalled()
 
-        await WorkerTestUtils.workScheduled({ queue: 'TestappBackgroundJobQueue' })
+        await WorkerTestUtils.workScheduled({ queue: parallelTestSafeQueueName('TestappBackgroundJobQueue') })
         expect(scheduledSpy).toHaveBeenCalledWith('message 1', expect.any(Job))
       })
     })
