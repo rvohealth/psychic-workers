@@ -1,6 +1,10 @@
 import { Job } from 'bullmq'
 import { background } from '../../../src/index.js'
 import User from '../../../test-app/src/app/models/User.js'
+import PsychicAppWorkers, {
+  PsychicWorkersAppTestInvocationType,
+} from '../../../src/psychic-app-workers/index.js'
+import WorkerTestUtils from '../../../src/test-utils/WorkerTestUtils.js'
 
 describe('a backgrounded model', () => {
   describe('.background', () => {
@@ -24,13 +28,19 @@ describe('a backgrounded model', () => {
     })
 
     context('priority and named workstream', () => {
-      beforeEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
-        background.connect()
+      let originalTestInvocation: PsychicWorkersAppTestInvocationType
+
+      beforeEach(async () => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        originalTestInvocation = workersApp.testInvocation
+        workersApp.set('testInvocation', 'manual')
+
+        await WorkerTestUtils.clean()
       })
 
       afterEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = undefined
+        const workersApp = PsychicAppWorkers.getOrFail()
+        workersApp.set('testInvocation', originalTestInvocation)
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
@@ -62,13 +72,19 @@ describe('a backgrounded model', () => {
     })
 
     context('priority and named workstream', () => {
-      beforeEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
-        background.connect()
+      let originalTestInvocation: PsychicWorkersAppTestInvocationType
+
+      beforeEach(async () => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        originalTestInvocation = workersApp.testInvocation
+        workersApp.set('testInvocation', 'manual')
+
+        await WorkerTestUtils.clean()
       })
 
       afterEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = undefined
+        const workersApp = PsychicAppWorkers.getOrFail()
+        workersApp.set('testInvocation', originalTestInvocation)
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
@@ -98,13 +114,24 @@ describe('a backgrounded model', () => {
     })
 
     context('priority and named workstream', () => {
-      beforeEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
+      let originalTestInvocation: PsychicWorkersAppTestInvocationType
+
+      beforeEach(async () => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        originalTestInvocation = workersApp.testInvocation
+        workersApp.set('testInvocation', 'manual')
+
         background.connect()
+
+        for (const queue of background.queues) {
+          await queue.drain()
+          await queue.clean(5000, 10000, 'completed')
+        }
       })
 
       afterEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = undefined
+        const workersApp = PsychicAppWorkers.getOrFail()
+        workersApp.set('testInvocation', originalTestInvocation)
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
@@ -144,13 +171,19 @@ describe('a backgrounded model', () => {
     })
 
     context('priority and named workstream', () => {
-      beforeEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
-        background.connect()
+      let originalTestInvocation: PsychicWorkersAppTestInvocationType
+
+      beforeEach(async () => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        originalTestInvocation = workersApp.testInvocation
+        workersApp.set('testInvocation', 'manual')
+
+        await WorkerTestUtils.clean()
       })
 
       afterEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = undefined
+        const workersApp = PsychicAppWorkers.getOrFail()
+        workersApp.set('testInvocation', originalTestInvocation)
       })
 
       it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {

@@ -4,7 +4,7 @@ import { BackgroundJobConfig, PsychicAppWorkers } from '../../../../src/index.js
 import ApplicationBackgroundedService from './ApplicationBackgroundedService.js'
 
 export default class LastDummyService extends ApplicationBackgroundedService {
-  public static get backgroundJobConfig(): BackgroundJobConfig<ApplicationBackgroundedService> {
+  public static override get backgroundJobConfig(): BackgroundJobConfig<ApplicationBackgroundedService> {
     return { priority: 'last' }
   }
 

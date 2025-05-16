@@ -274,6 +274,7 @@ export class Background {
       for (let i = 0; i < workerCount; i++) {
         this._workers.push(
           new Background.Worker(formattedQueueName, async job => await this.doWork(job), {
+            autorun: !EnvInternal.isTest,
             connection: defaultWorkerConnection,
             concurrency: backgroundOptions.defaultWorkstream?.concurrency || DEFAULT_CONCURRENCY,
           }),
@@ -326,6 +327,7 @@ export class Background {
         for (let i = 0; i < workerCount; i++) {
           this._workers.push(
             new Background.Worker(namedWorkstreamFormattedQueueName, async job => await this.doWork(job), {
+              autorun: !EnvInternal.isTest,
               group: {
                 id: namedWorkstream.name,
                 limit: namedWorkstream.rateLimit,
@@ -406,6 +408,7 @@ export class Background {
       for (let i = 0; i < workerCount; i++) {
         this._workers.push(
           new Background.Worker(formattedQueueName, async job => await this.doWork(job), {
+            autorun: !EnvInternal.isTest,
             ...(backgroundOptions.nativeBullMQ.defaultWorkerOptions || {}),
             connection: defaultWorkerConnection,
           }),
@@ -460,6 +463,7 @@ export class Background {
         for (let i = 0; i < extraWorkerCount; i++) {
           this._workers.push(
             new Background.Worker(formattedQueuename, async job => await this.doWork(job), {
+              autorun: !EnvInternal.isTest,
               ...extraWorkerOptions,
               connection: namedWorkerConnection,
             }),
@@ -712,7 +716,12 @@ export class Background {
     // this as `undefined`
     const delay = delaySeconds ? delaySeconds * 1000 : undefined
 
-    if (EnvInternal.isTest && !EnvInternal.boolean('REALLY_TEST_BACKGROUND_QUEUE')) {
+    const workersApp = PsychicAppWorkers.getOrFail()
+
+    // in test environments, this block will short-circuit adding to the queue,
+    // causing the job to immediately invoke instead. This behavior can be bypassed
+    // by setting `testInvocation=manual` in the workers config.
+    if (EnvInternal.isTest && workersApp.testInvocation === 'automatic') {
       const queue = new Background.Queue('TestQueue', { connection: {} })
       const job = new Job(queue, jobType, jobData, {})
       await this.doWork(job)

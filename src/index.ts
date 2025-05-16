@@ -18,3 +18,5 @@ export {
 
 export { default as NoQueueForSpecifiedQueueName } from './error/background/NoQueueForSpecifiedQueueName.js'
 export { default as NoQueueForSpecifiedWorkstream } from './error/background/NoQueueForSpecifiedWorkstream.js'
+
+export { default as WorkerTestUtils } from './test-utils/WorkerTestUtils.js'
