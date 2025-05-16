@@ -55,6 +55,21 @@ export default class PsychicAppWorkers {
   }
   private _backgroundOptions: PsychicBackgroundOptions
 
+  /**
+   * Returns the testInvocation option provided by the user
+   *
+   * when "automatic", any backgrounded job will be immediately
+   * invoked during tests. This is the default behavior
+   *
+   * when "manual", this will enable the dev to manually interact with
+   * queues, enabling them to target jobs and run them at specific
+   * code points.
+   */
+  public get testInvocation() {
+    return this._testInvocation
+  }
+  private _testInvocation: PsychicWorkersAppTestInvocationType = 'automatic'
+
   private _hooks: PsychicWorkersAppHooks = {
     workerShutdown: [],
   }
@@ -78,7 +93,11 @@ export default class PsychicAppWorkers {
 
   public set<Opt extends PsychicWorkersAppOption>(
     option: Opt,
-    value: Opt extends 'background' ? PsychicBackgroundOptions : unknown,
+    value: Opt extends 'background'
+      ? PsychicBackgroundOptions
+      : Opt extends 'testInvocation'
+        ? PsychicWorkersAppTestInvocationType
+        : unknown,
   ) {
     switch (option) {
       case 'background':
@@ -90,8 +109,12 @@ export default class PsychicAppWorkers {
             },
           },
 
-          ...value,
+          ...(value as PsychicBackgroundOptions),
         }
+        break
+
+      case 'testInvocation':
+        this._testInvocation = value as PsychicWorkersAppTestInvocationType
         break
 
       default:
@@ -105,7 +128,9 @@ export interface PsychicWorkersTypeSync {
   queueGroupMap: Record<string, string[]>
 }
 
-export type PsychicWorkersAppOption = 'background'
+export type PsychicWorkersAppOption = 'background' | 'testInvocation'
+
+export type PsychicWorkersAppTestInvocationType = 'automatic' | 'manual'
 
 export type PsychicWorkersHookEventType = 'workers:shutdown'
 
