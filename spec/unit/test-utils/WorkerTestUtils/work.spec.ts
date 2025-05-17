@@ -7,6 +7,7 @@ import User from '../../../../test-app/src/app/models/User.js'
 import DummyService from '../../../../test-app/src/app/services/DummyService.js'
 import LastDummyServiceInNamedWorkstream from '../../../../test-app/src/app/services/LastDummyServiceInNamedWorkstream.js'
 import UrgentDummyService from '../../../../test-app/src/app/services/UrgentDummyService.js'
+import parallelTestSafeQueueName from '../../../../src/background/helpers/parallelTestSafeQueueName.js'
 
 describe('.work', () => {
   let originalTestInvocation: PsychicWorkersAppTestInvocationType
@@ -61,6 +62,20 @@ describe('.work', () => {
       expect(userSpy).toHaveBeenCalledWith('message 3', expect.any(Job))
       expect(urgentSpy).toHaveBeenCalledWith('message 4', expect.any(Job))
       expect(workstreamSpy).toHaveBeenCalledWith('message 5', expect.any(Job))
+    })
+  })
+
+  context('when provided a queue', () => {
+    it('only works of the jobs from that queue', async () => {
+      const bgSpy = vi.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
+      await DummyService.background('classRunInBG', 'message 1')
+      expect(bgSpy).not.toHaveBeenCalled()
+
+      await WorkerTestUtils.work({ queue: parallelTestSafeQueueName('snazzy') })
+      expect(bgSpy).not.toHaveBeenCalled()
+
+      await WorkerTestUtils.work({ queue: parallelTestSafeQueueName('TestappBackgroundJobQueue') })
+      expect(bgSpy).toHaveBeenCalledWith('message 1', expect.any(Job))
     })
   })
 })

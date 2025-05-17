@@ -3,6 +3,8 @@ import background, { Background } from '../background/index.js'
 import { BackgroundJobData } from '../types/background.js'
 import parallelTestSafeQueueName from '../background/helpers/parallelTestSafeQueueName.js'
 
+const LOCK_TOKEN = 'psychic-test-worker'
+
 export default class WorkerTestUtils {
   /*
    * Safely encapsulate's a queue name in parallel test runs,
@@ -28,20 +30,22 @@ export default class WorkerTestUtils {
    * make sure to set this in your workers config, or else in your test,
    * so that jobs are successfully commited to the queue and can be worked off.
    */
-  public static async work() {
+  public static async work(opts: TestWorkerWorkOffOpts = {}) {
     background.connect()
     const queues = background.queues
+
     let workWasDone: boolean = true
 
     do {
       workWasDone = false
       for (const queue of queues) {
+        if (opts.queue && !this.queueNamesMatch(queue, opts.queue)) continue
         workWasDone ||= await this.workOne(queue)
       }
     } while (workWasDone)
   }
 
-  public static async workScheduled(opts: { queue?: string; for?: { globalName: string } } = {}) {
+  public static async workScheduled(opts: TestWorkerScheduledWorkOffOpts = {}) {
     background.connect()
 
     const queues = opts.queue
@@ -112,22 +116,35 @@ export default class WorkerTestUtils {
 
     if (!worker) throw new Error(`Failed to find worker for queue: ${queue.name}`)
 
-    const lockToken = 'test-worker'
-
-    const job = await worker.getNextJob(lockToken)
+    const job = await worker.getNextJob(LOCK_TOKEN)
     if (!job) return false
 
     await this.processJob(job)
     return true
   }
 
+  private static queueNamesMatch(queue: Queue, compareQueueName: string): boolean {
+    return (
+      queue.name === parallelTestSafeQueueName(compareQueueName) ||
+      queue.name === `{${parallelTestSafeQueueName(compareQueueName)}`
+    )
+  }
+
   private static async processJob(job: Job) {
-    const lockToken = 'test-worker'
     try {
       const res = await background.doWork(job)
-      await job.moveToCompleted(res, lockToken, false)
+      await job.moveToCompleted(res, LOCK_TOKEN, false)
     } catch (err) {
-      await job.moveToFailed(err as Error, lockToken, false)
+      await job.moveToFailed(err as Error, LOCK_TOKEN, false)
     }
   }
+}
+
+interface TestWorkerWorkOffOpts {
+  queue?: string
+}
+
+interface TestWorkerScheduledWorkOffOpts {
+  queue?: string
+  for?: { globalName: string }
 }
