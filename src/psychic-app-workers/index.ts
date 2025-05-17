@@ -26,6 +26,10 @@ export default class PsychicAppWorkers {
       await background.closeAllRedisConnections()
     })
 
+    psychicApp.on('server:init:after-routes', () => {
+      background.connect()
+    })
+
     cachePsychicWorkersApp(psychicWorkersApp)
 
     return psychicWorkersApp
