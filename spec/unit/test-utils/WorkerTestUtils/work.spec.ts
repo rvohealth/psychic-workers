@@ -63,4 +63,18 @@ describe('.work', () => {
       expect(workstreamSpy).toHaveBeenCalledWith('message 5', expect.any(Job))
     })
   })
+
+  context('when provided a queue', () => {
+    it('only works of the jobs from that queue', async () => {
+      const bgSpy = vi.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
+      await DummyService.background('classRunInBG', 'message 1')
+      expect(bgSpy).not.toHaveBeenCalled()
+
+      await WorkerTestUtils.work({ queue: 'snazzy' })
+      expect(bgSpy).not.toHaveBeenCalled()
+
+      await WorkerTestUtils.work({ queue: 'TestappBackgroundJobQueue' })
+      expect(bgSpy).toHaveBeenCalledWith('message 1', expect.any(Job))
+    })
+  })
 })
