@@ -6,11 +6,11 @@ import { BackgroundJobConfig, PsychicAppWorkers } from '../../../../src/index.js
 import ApplicationBackgroundedModel from './ApplicationBackgroundedModel.js'
 
 export default class User extends ApplicationBackgroundedModel {
-  public get table() {
+  public override get table() {
     return 'users' as const
   }
 
-  public static get backgroundJobConfig(): BackgroundJobConfig<ApplicationBackgroundedModel> {
+  public static override get backgroundJobConfig(): BackgroundJobConfig<ApplicationBackgroundedModel> {
     return { priority: 'urgent', workstream: 'snazzy' }
   }
 

@@ -80,18 +80,15 @@ export default (workersApp: PsychicAppWorkers) => {
       enableOfflineQueue: false,
     }),
 
-    defaultWorkerConnection:
-      process.env.NOT_REAL_FLAG === '1'
-        ? undefined
-        : new Redis({
-            username: process.env.REDIS_USER!,
-            password: process.env.REDIS_PASSWORD!,
-            host: process.env.REDIS_HOST!,
-            port: process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6379,
-            // uncomment if you need tls
-            // tls: {},
-            maxRetriesPerRequest: null,
-          }),
+    defaultWorkerConnection: new Redis({
+      username: process.env.REDIS_USER!,
+      password: process.env.REDIS_PASSWORD!,
+      host: process.env.REDIS_HOST!,
+      port: process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6379,
+      // uncomment if you need tls
+      // tls: {},
+      maxRetriesPerRequest: null,
+    }),
 
     // To set up a simple cluster on a dev machine for testing:
     //   https://medium.com/@bertrandoubida/setting-up-redis-cluster-on-macos-cf35a21465a
