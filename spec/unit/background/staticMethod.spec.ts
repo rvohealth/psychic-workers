@@ -2,6 +2,10 @@ import { Job } from 'bullmq'
 import { background, BackgroundQueuePriority } from '../../../src/index.js'
 import DummyService from '../../../test-app/src/app/services/DummyService.js'
 import readTmpFile from '../../helpers/readTmpFile.js'
+import PsychicAppWorkers, {
+  PsychicWorkersAppTestInvocationType,
+} from '../../../src/psychic-app-workers/index.js'
+import WorkerTestUtils from '../../../src/test-utils/WorkerTestUtils.js'
 
 describe('background (app singleton)', () => {
   describe('.staticMethod', () => {
@@ -33,7 +37,7 @@ describe('background (app singleton)', () => {
 
       function expectAddedToQueueWithPriority(priority: BackgroundQueuePriority, priorityLevel: number) {
         // eslint-disable-next-line @typescript-eslint/unbound-method
-        expect(background.queues[0].add).toHaveBeenCalledWith(
+        expect(background.queues[0]!.add).toHaveBeenCalledWith(
           'BackgroundJobQueueStaticJob',
           {
             globalName: 'DummyService',
@@ -45,15 +49,28 @@ describe('background (app singleton)', () => {
         )
       }
 
-      beforeEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
-        background.connect()
+      let originalTestInvocation: PsychicWorkersAppTestInvocationType
+      let originalWorkerCount: string | undefined
 
-        vi.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+      beforeEach(async () => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        originalTestInvocation = workersApp.testInvocation
+        workersApp.set('testInvocation', 'manual')
+
+        originalWorkerCount = process.env.WORKER_COUNT
+        process.env.WORKER_COUNT = '1'
+
+        background.connect()
+        vi.spyOn(background.queues[0]!, 'add').mockResolvedValue({} as Job)
+
+        await WorkerTestUtils.clean()
       })
 
       afterEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = undefined
+        const workersApp = PsychicAppWorkers.getOrFail()
+        workersApp.set('testInvocation', originalTestInvocation)
+
+        process.env.WORKER_COUNT = originalWorkerCount
       })
 
       context('default priority', () => {
@@ -113,7 +130,7 @@ describe('background (app singleton)', () => {
 
       function expectAddedToQueueWithPriority(priority: BackgroundQueuePriority, delay: number) {
         // eslint-disable-next-line @typescript-eslint/unbound-method
-        expect(background.queues[0].add).toHaveBeenCalledWith(
+        expect(background.queues[0]!.add).toHaveBeenCalledWith(
           'BackgroundJobQueueStaticJob',
           {
             globalName: 'DummyService',
@@ -125,15 +142,28 @@ describe('background (app singleton)', () => {
         )
       }
 
-      beforeEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = '1'
-        background.connect()
+      let originalTestInvocation: PsychicWorkersAppTestInvocationType
+      let originalWorkerCount: string | undefined
 
-        vi.spyOn(background.queues[0], 'add').mockResolvedValue({} as Job)
+      beforeEach(async () => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        originalTestInvocation = workersApp.testInvocation
+        workersApp.set('testInvocation', 'manual')
+
+        originalWorkerCount = process.env.WORKER_COUNT
+        process.env.WORKER_COUNT = '1'
+
+        background.connect()
+        vi.spyOn(background.queues[0]!, 'add').mockResolvedValue({} as Job)
+
+        await WorkerTestUtils.clean()
       })
 
       afterEach(() => {
-        process.env.REALLY_TEST_BACKGROUND_QUEUE = undefined
+        const workersApp = PsychicAppWorkers.getOrFail()
+        workersApp.set('testInvocation', originalTestInvocation)
+
+        process.env.WORKER_COUNT = originalWorkerCount
       })
 
       it('sets the delay in milliseconds', async () => {
