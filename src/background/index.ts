@@ -674,7 +674,7 @@ export class Background {
     await this._addToQueue(
       'BackgroundJobQueueModelInstanceJob',
       {
-        id: modelInstance.primaryKeyValue,
+        id: modelInstance.primaryKeyValue() as string | number,
         globalName: (modelInstance.constructor as typeof Dream).globalName,
         method,
         args,

@@ -69,7 +69,6 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   : ColumnType<T, T | undefined, T>;
 
 export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
-export type IdType = string | number | bigint
 export type Timestamp = ColumnType<DateTime | CalendarDate>
 
 export interface Users {

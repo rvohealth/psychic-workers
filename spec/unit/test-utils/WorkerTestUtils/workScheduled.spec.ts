@@ -1,4 +1,5 @@
 import { Job } from 'bullmq'
+import parallelTestSafeQueueName from '../../../../src/background/helpers/parallelTestSafeQueueName.js'
 import PsychicAppWorkers, {
   PsychicWorkersAppTestInvocationType,
 } from '../../../../src/psychic-app-workers/index.js'
@@ -8,7 +9,6 @@ import DummyScheduledService from '../../../../test-app/src/app/services/DummySc
 import DummyService from '../../../../test-app/src/app/services/DummyService.js'
 import LastDummyServiceInNamedWorkstream from '../../../../test-app/src/app/services/LastDummyServiceInNamedWorkstream.js'
 import UrgentDummyService from '../../../../test-app/src/app/services/UrgentDummyService.js'
-import parallelTestSafeQueueName from '../../../../src/background/helpers/parallelTestSafeQueueName.js'
 
 describe('.work', () => {
   let originalTestInvocation: PsychicWorkersAppTestInvocationType

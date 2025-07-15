@@ -1,4 +1,3 @@
-import { IdType } from '@rvoh/dream'
 import BaseBackgroundedService from '../background/BaseBackgroundedService.js'
 import BaseScheduledService from '../background/BaseScheduledService.js'
 import {
@@ -11,7 +10,7 @@ export interface BackgroundJobData {
   /**
    * the id of the background job. This is provided by BullMQ
    */
-  id?: IdType
+  id?: string | number
 
   /**
    * the method name of the method on the provided class

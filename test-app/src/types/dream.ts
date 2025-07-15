@@ -58,21 +58,16 @@ us humans, he says:
 */
 
 import { type CalendarDate, type DateTime } from '@rvoh/dream'
-import {
-  IdType
-} from './db.js'
+
 
 export const schema = {
   users: {
-    primaryKey: 'id',
-    createdAtField: 'createdAt',
-    updatedAtField: 'updatedAt',
-    deletedAtField: 'deletedAt',
     serializerKeys: ['default', 'summary'],
     scopes: {
       default: [],
       named: [],
     },
+    nonJsonColumnNames: ['createdAt', 'email', 'id', 'updatedAt'],
     columns: {
       createdAt: {
         coercedType: {} as DateTime,
@@ -93,7 +88,7 @@ export const schema = {
         isArray: false,
       },
       id: {
-        coercedType: {} as IdType,
+        coercedType: {} as string,
         enumType: null,
         enumArrayType: null,
         enumValues: null,
