@@ -113,13 +113,12 @@ export const schema = {
   },
 } as const
 
-export const globalSchema = {
+export const connectionTypeConfig = {
   passthroughColumns: [],
   allDefaultScopeNames: [],
   globalNames: {
     models: {
       'User': 'users'
     },
-    serializers: ['UserSerializer', 'UserSummarySerializer'],
   },
 } as const

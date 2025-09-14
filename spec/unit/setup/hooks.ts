@@ -1,10 +1,10 @@
-import { DreamApp } from '@rvoh/dream'
+import { Dream, DreamApp } from '@rvoh/dream'
 import { provideDreamViteMatchers, truncate } from '@rvoh/dream-spec-helpers'
 import { background } from '../../../src/index.js'
 import initializePsychicApp from '../../../test-app/src/cli/helpers/initializePsychicApp.js'
 import rmTmpFile from '../../helpers/rmTmpFile.js'
 
-provideDreamViteMatchers()
+provideDreamViteMatchers(Dream)
 
 // define global context variable, setting it equal to describe
 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
@@ -17,12 +17,7 @@ provideDreamViteMatchers()
 ;(global as any).jest = vi
 
 beforeEach(async () => {
-  try {
-    await initializePsychicApp()
-  } catch (error) {
-    console.error(error)
-    throw error
-  }
+  await initializePsychicApp()
 
   background.connect()
 

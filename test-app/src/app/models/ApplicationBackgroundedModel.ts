@@ -1,25 +1,29 @@
-import BaseBackgroundedModel from '../../../../src/background/BaseBackgroundedModel.js'
-import { BackgroundJobConfig } from '../../../../src/index.js'
+import { BackgroundJobConfig, BaseBackgroundedModel } from '../../../../src/index.js'
 import { DBClass } from '../../types/db.js'
-import { globalSchema, schema } from '../../types/dream.js'
+import { globalTypeConfig } from '../../types/dream.globals.js'
+import { connectionTypeConfig, schema } from '../../types/dream.js'
 import psychicTypes from '../../types/psychic.js'
 
 export default class ApplicationBackgroundedModel extends BaseBackgroundedModel {
-  public DB: DBClass
+  declare public DB: DBClass
 
-  public static get backgroundJobConfig(): BackgroundJobConfig<BaseBackgroundedModel> {
-    return {}
-  }
-
-  public get schema() {
+  public override get schema() {
     return schema
   }
 
-  public get globalSchema() {
-    return globalSchema
+  public override get connectionTypeConfig() {
+    return connectionTypeConfig
   }
 
-  public get psychicTypes() {
+  public override get globalTypeConfig() {
+    return globalTypeConfig
+  }
+
+  public override get psychicTypes() {
     return psychicTypes
+  }
+
+  public static override get backgroundJobConfig(): BackgroundJobConfig<BaseBackgroundedModel> {
+    return {}
   }
 }

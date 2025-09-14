@@ -1,15 +1,20 @@
 import { Dream } from '@rvoh/dream'
 import { DBClass } from '../../types/db.js'
-import { globalSchema, schema } from '../../types/dream.js'
+import { globalTypeConfig } from '../../types/dream.globals.js'
+import { connectionTypeConfig, schema } from '../../types/dream.js'
 
 export default class ApplicationModel extends Dream {
   declare public DB: DBClass
 
-  public get schema() {
+  public override get schema() {
     return schema
   }
 
-  public get globalSchema() {
-    return globalSchema
+  public override get connectionTypeConfig() {
+    return connectionTypeConfig
+  }
+
+  public override get globalTypeConfig() {
+    return globalTypeConfig
   }
 }
