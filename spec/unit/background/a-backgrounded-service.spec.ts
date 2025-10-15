@@ -1,13 +1,15 @@
 import { Job } from 'bullmq'
 import { MockInstance } from 'vitest'
+import AttemtedToBackgroundEntireDreamModel from '../../../src/error/background/AttemtedToBackgroundEntireDreamModel.js'
 import { background, BackgroundQueuePriority, PsychicAppWorkers } from '../../../src/index.js'
 import { PsychicWorkersAppTestInvocationType } from '../../../src/psychic-app-workers/index.js'
+import WorkerTestUtils from '../../../src/test-utils/WorkerTestUtils.js'
+import createUser from '../../../test-app/spec/factories/UserFactory.js'
 import DummyService from '../../../test-app/src/app/services/DummyService.js'
 import LastDummyService from '../../../test-app/src/app/services/LastDummyService.js'
 import LastDummyServiceInNamedWorkstream from '../../../test-app/src/app/services/LastDummyServiceInNamedWorkstream.js'
 import NotUrgentDummyService from '../../../test-app/src/app/services/NotUrgentDummyService.js'
 import UrgentDummyService from '../../../test-app/src/app/services/UrgentDummyService.js'
-import WorkerTestUtils from '../../../src/test-utils/WorkerTestUtils.js'
 
 describe('a backgrounded service', () => {
   describe('.background', () => {
@@ -22,6 +24,15 @@ describe('a backgrounded service', () => {
 
       await DummyService.background('classRunInBGWithJobArg', 'bottlearum')
       expect(bgWithJobArgSpy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
+    })
+
+    context('attempting to background an entire Dream model', () => {
+      it('throws AttemtedToBackgroundEntireDreamModel', async () => {
+        const user = await createUser()
+        await expect(DummyService.background('classRunInBG', user)).rejects.toThrow(
+          AttemtedToBackgroundEntireDreamModel,
+        )
+      })
     })
 
     context('queue priority', () => {
@@ -151,6 +162,15 @@ describe('a backgrounded service', () => {
       const spy = vi.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
       await DummyService.backgroundWithDelay({ seconds: 25, jobId: 'myjob' }, 'classRunInBG', 'bottlearum')
       expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
+    })
+
+    context('attempting to background an entire Dream model', () => {
+      it('throws AttemtedToBackgroundEntireDreamModel', async () => {
+        const user = await createUser()
+        await expect(
+          DummyService.backgroundWithDelay({ seconds: 25, jobId: 'myjob' }, 'classRunInBG', user),
+        ).rejects.toThrow(AttemtedToBackgroundEntireDreamModel)
+      })
     })
 
     context('queue priority', () => {

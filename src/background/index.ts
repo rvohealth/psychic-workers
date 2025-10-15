@@ -26,6 +26,7 @@ import PsychicAppWorkers, {
   TransitionalPsychicBackgroundSimpleOptions,
 } from '../psychic-app-workers/index.js'
 
+import AttemtedToBackgroundEntireDreamModel from '../error/background/AttemtedToBackgroundEntireDreamModel.js'
 import {
   BackgroundJobConfig,
   BackgroundJobData,
@@ -708,6 +709,10 @@ export class Background {
       groupId?: string | undefined
     },
   ) {
+    ;(jobData.args as unknown[]).forEach(arg => {
+      if (arg instanceof Dream) throw new AttemtedToBackgroundEntireDreamModel(jobData.method, arg)
+    })
+
     // set this variable out side of the conditional so that
     // mismatches will raise exceptions even in tests
     const queueInstance = this.queueInstance(jobConfig)
