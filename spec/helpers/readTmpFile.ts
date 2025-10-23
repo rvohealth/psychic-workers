@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { PsychicAppWorkers } from '../../src/index.js'
+import PsychicAppWorkers from '../../src/psychic-app-workers/index.js'
 
 export default async function readTmpFile() {
   const psychicWorkersApp = PsychicAppWorkers.getOrFail()

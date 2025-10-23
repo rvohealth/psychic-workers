@@ -1,9 +1,12 @@
 import { Job } from 'bullmq'
 import { MockInstance } from 'vitest'
+import background from '../../../src/background/index.js'
 import AttemtedToBackgroundEntireDreamModel from '../../../src/error/background/AttemtedToBackgroundEntireDreamModel.js'
-import { background, BackgroundQueuePriority, PsychicAppWorkers } from '../../../src/index.js'
-import { PsychicWorkersAppTestInvocationType } from '../../../src/psychic-app-workers/index.js'
+import PsychicAppWorkers, {
+  PsychicWorkersAppTestInvocationType,
+} from '../../../src/psychic-app-workers/index.js'
 import WorkerTestUtils from '../../../src/test-utils/WorkerTestUtils.js'
+import { BackgroundQueuePriority } from '../../../src/types/background.js'
 import createUser from '../../../test-app/spec/factories/UserFactory.js'
 import DummyService from '../../../test-app/src/app/services/DummyService.js'
 import LastDummyService from '../../../test-app/src/app/services/LastDummyService.js'

@@ -1,5 +1,5 @@
-import pluralize from 'pluralize'
+import pluralize from 'pluralize-esm'
 
-export default function inflections() {
+export default () => {
   pluralize.addUncountableRule('paper')
 }

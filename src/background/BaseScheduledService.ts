@@ -1,4 +1,4 @@
-import { GlobalNameNotSet } from '@rvoh/dream'
+import { GlobalNameNotSet } from '@rvoh/dream/errors'
 import { BackgroundJobConfig } from '../types/background.js'
 import { FunctionPropertyNames } from '../types/utils.js'
 import background from './index.js'

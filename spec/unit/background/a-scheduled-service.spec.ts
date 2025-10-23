@@ -1,5 +1,5 @@
 import { Job } from 'bullmq'
-import { background } from '../../../src/index.js'
+import { background } from '../../../src/package-exports/index.js'
 import DefaultDummyScheduledService from '../../../test-app/src/app/services/DefaultDummyScheduledService.js'
 
 describe('a scheduled service', () => {

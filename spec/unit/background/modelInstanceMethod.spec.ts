@@ -1,11 +1,12 @@
 import { Job } from 'bullmq'
-import { background, BackgroundQueuePriority } from '../../../src/index.js'
-import createUser from '../../../test-app/spec/factories/UserFactory.js'
-import User from '../../../test-app/src/app/models/User.js'
+import background from '../../../src/background/index.js'
 import PsychicAppWorkers, {
   PsychicWorkersAppTestInvocationType,
 } from '../../../src/psychic-app-workers/index.js'
 import WorkerTestUtils from '../../../src/test-utils/WorkerTestUtils.js'
+import { BackgroundQueuePriority } from '../../../src/types/background.js'
+import createUser from '../../../test-app/spec/factories/UserFactory.js'
+import User from '../../../test-app/src/app/models/User.js'
 
 describe('background (app singleton)', () => {
   describe('.modelInstanceMethod', () => {

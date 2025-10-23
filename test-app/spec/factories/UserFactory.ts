@@ -1,4 +1,4 @@
-import { UpdateableProperties } from '@rvoh/dream'
+import { UpdateableProperties } from '@rvoh/dream/types'
 import User from '../../src/app/models/User.js'
 
 let counter = 0

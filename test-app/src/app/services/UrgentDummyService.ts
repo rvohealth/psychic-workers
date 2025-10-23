@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { BackgroundJobConfig, PsychicAppWorkers } from '../../../../src/index.js'
+import PsychicAppWorkers from '../../../../src/psychic-app-workers/index.js'
+import { BackgroundJobConfig } from '../../../../src/types/background.js'
 import ApplicationBackgroundedService from './ApplicationBackgroundedService.js'
 
 export default class UrgentDummyService extends ApplicationBackgroundedService {
-  public static get backgroundJobConfig(): BackgroundJobConfig<ApplicationBackgroundedService> {
+  public static override get backgroundJobConfig(): BackgroundJobConfig<ApplicationBackgroundedService> {
     return { priority: 'urgent' }
   }
 

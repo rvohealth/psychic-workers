@@ -1,6 +1,6 @@
 import { Dream, DreamApp } from '@rvoh/dream'
 import { provideDreamViteMatchers, truncate } from '@rvoh/dream-spec-helpers'
-import { background } from '../../../src/index.js'
+import { background } from '../../../src/package-exports/index.js'
 import initializePsychicApp from '../../../test-app/src/cli/helpers/initializePsychicApp.js'
 import rmTmpFile from '../../helpers/rmTmpFile.js'
 

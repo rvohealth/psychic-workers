@@ -1,5 +1,5 @@
-import { background } from '../../../src/index.js'
-import { PsychicWorkersHookEventType } from '../../../src/psychic-application-workers.js'
+import { background } from '../../../src/package-exports/index.js'
+import { PsychicWorkersHookEventType } from '../../../src/psychic-app-workers/index.js'
 
 describe('PsychicWorkers hooks', () => {
   beforeEach(() => {
