@@ -52,8 +52,8 @@
     "dev-worker": "NODE_ENV=development WORKER_COUNT=1 tsx ./test-app/worker.ts"
   },
   "peerDependencies": {
-    "@rvoh/dream": "*",
-    "@rvoh/psychic": "*",
+    "@rvoh/dream": "^2.0.0-alpha.2",
+    "@rvoh/psychic": "^2.0.0-alpha.1",
     "bullmq": "*",
     "ioredis": "*"
   },
