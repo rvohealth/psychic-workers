@@ -846,7 +846,3 @@ export class Background {
 
 const background = new Background()
 export default background
-
-export async function stopBackgroundWorkers() {
-  await background.shutdown()
-}
