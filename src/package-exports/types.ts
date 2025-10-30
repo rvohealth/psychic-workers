@@ -1,5 +1,4 @@
 export {
-  default as PsychicAppWorkers,
   type BullMQNativeWorkerOptions,
   type PsychicBackgroundNativeBullMQOptions,
   type PsychicBackgroundSimpleOptions,
