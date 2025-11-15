@@ -1,4 +1,4 @@
-import { GlobalNameNotSet } from '@rvoh/dream'
+import { GlobalNameNotSet } from '@rvoh/dream/errors'
 import { Job } from 'bullmq'
 import durationToSeconds from '../helpers/durationToSeconds.js'
 import { BackgroundJobConfig, DelayedJobOpts } from '../types/background.js'

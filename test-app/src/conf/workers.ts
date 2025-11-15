@@ -1,6 +1,6 @@
 import { Queue, Worker } from 'bullmq'
 import { Redis } from 'ioredis'
-import { PsychicAppWorkers } from '../../../src/index.js'
+import PsychicAppWorkers from '../../../src/psychic-app-workers/index.js'
 
 export default (workersApp: PsychicAppWorkers) => {
   workersApp.set('background', {

@@ -1,4 +1,6 @@
-import { closeAllDbConnections, compact, Dream, pascalize } from '@rvoh/dream'
+import { Dream } from '@rvoh/dream'
+import { closeAllDbConnections } from '@rvoh/dream/db'
+import { compact, pascalize } from '@rvoh/dream/utils'
 import { PsychicApp } from '@rvoh/psychic'
 import {
   Job,
@@ -844,7 +846,3 @@ export class Background {
 
 const background = new Background()
 export default background
-
-export async function stopBackgroundWorkers() {
-  await background.shutdown()
-}

@@ -5,6 +5,8 @@ import inflections from './inflections.js'
 import routesCb from './routes.js'
 
 export default async (psy: PsychicApp) => {
+  Error.stackTraceLimit = 50
+
   await psy.load('controllers', srcPath('app', 'controllers'), path => importDefault(path))
   await psy.load('services', srcPath('app', 'services'), path => importDefault(path))
 

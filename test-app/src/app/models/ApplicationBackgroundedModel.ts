@@ -1,4 +1,5 @@
-import { BackgroundJobConfig, BaseBackgroundedModel } from '../../../../src/index.js'
+import BaseBackgroundedModel from '../../../../src/background/BaseBackgroundedModel.js'
+import { BackgroundJobConfig } from '../../../../src/types/background.js'
 import { DBClass } from '../../types/db.js'
 import { globalTypeConfig } from '../../types/dream.globals.js'
 import { connectionTypeConfig, schema } from '../../types/dream.js'

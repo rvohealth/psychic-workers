@@ -1,10 +1,10 @@
 import { Job } from 'bullmq'
-import { background } from '../../../src/index.js'
-import User from '../../../test-app/src/app/models/User.js'
+import { background } from '../../../src/package-exports/index.js'
 import PsychicAppWorkers, {
   PsychicWorkersAppTestInvocationType,
 } from '../../../src/psychic-app-workers/index.js'
 import WorkerTestUtils from '../../../src/test-utils/WorkerTestUtils.js'
+import User from '../../../test-app/src/app/models/User.js'
 
 describe('a backgrounded model', () => {
   describe('.background', () => {
