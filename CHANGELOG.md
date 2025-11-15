@@ -1,3 +1,8 @@
+## 2.0.0
+
+- namespace exports
+- support Dream and Psychic 2.0
+
 ## 1.4.0
 
 - throw an error if attempting to background an entire Dream model
