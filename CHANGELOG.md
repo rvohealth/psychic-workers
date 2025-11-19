@@ -1,3 +1,7 @@
+## 2.0.1
+
+bump glob to close dependabot alert
+
 ## 2.0.0
 
 - namespace exports
