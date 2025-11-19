@@ -2,7 +2,7 @@
   "type": "module",
   "name": "@rvoh/psychic-workers",
   "description": "Background job system for Psychic applications",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "RVO Health",
   "repository": {
     "type": "git",
@@ -83,7 +83,7 @@
     "socket.io-adapter": "^2.5.5",
     "supertest": "^7.1.4",
     "tslib": "^2.7.0",
-    "tsx": "^4.19.3",
+    "tsx": "^4.20.6",
     "typedoc": "^0.26.6",
     "typescript": "^5.8.2",
     "typescript-eslint": "=7.18.0",
