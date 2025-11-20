@@ -146,7 +146,17 @@ describe('a backgrounded model', () => {
             importKey: undefined,
             method: 'classRunInBG',
           },
-          { delay: 15000, jobId: 'myjob', group: { id: 'snazzy', priority: 1 } },
+          {
+            deduplication: {
+              extend: true,
+              id: 'myjob',
+              replace: true,
+              ttl: 15000,
+            },
+            delay: 15000,
+            jobId: 'myjob',
+            group: { id: 'snazzy', priority: 1 },
+          },
         )
       })
     })
@@ -200,7 +210,17 @@ describe('a backgrounded model', () => {
             id: user.id,
             method: 'instanceRunInBG',
           },
-          { delay: 7000, jobId: 'myjob', group: { id: 'snazzy', priority: 1 } },
+          {
+            deduplication: {
+              extend: true,
+              id: 'myjob',
+              replace: true,
+              ttl: 7000,
+            },
+            delay: 7000,
+            jobId: 'myjob',
+            group: { id: 'snazzy', priority: 1 },
+          },
         )
       })
     })

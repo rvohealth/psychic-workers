@@ -1,7 +1,7 @@
 import { Job, Queue, WorkerOptions } from 'bullmq'
+import parallelTestSafeQueueName from '../background/helpers/parallelTestSafeQueueName.js'
 import background, { Background } from '../background/index.js'
 import { BackgroundJobData } from '../types/background.js'
-import parallelTestSafeQueueName from '../background/helpers/parallelTestSafeQueueName.js'
 
 const LOCK_TOKEN = 'psychic-test-worker'
 
@@ -58,7 +58,8 @@ export default class WorkerTestUtils {
       )
 
     for (const queue of queues) {
-      const jobs = (await queue.getDelayed()) as Job[]
+      const jobs = await queue.getDelayed()
+
       for (const job of jobs) {
         const data = job.data as BackgroundJobData
         if (opts.for) {

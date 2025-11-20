@@ -2,7 +2,7 @@
   "type": "module",
   "name": "@rvoh/psychic-workers",
   "description": "Background job system for Psychic applications",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "author": "RVO Health",
   "repository": {
     "type": "git",
@@ -54,8 +54,8 @@
   "peerDependencies": {
     "@rvoh/dream": "^2.0.0",
     "@rvoh/psychic": "^2.0.0",
-    "bullmq": "*",
-    "ioredis": "*"
+    "bullmq": "^5.64.0",
+    "ioredis": "^5.8.2"
   },
   "devDependencies": {
     "@eslint/js": "=9.0.0",
@@ -69,10 +69,10 @@
     "@types/node": "^22.5.1",
     "@types/pg": "^8",
     "@types/supertest": "^6.0.3",
-    "bullmq": "^5.52.0",
+    "bullmq": "^5.64.0",
     "eslint": "^9.9.1",
     "express": "^4.21.2",
-    "ioredis": "^5.4.1",
+    "ioredis": "^5.8.2",
     "kysely": "^0.28.7",
     "kysely-codegen": "^0.17.0",
     "luxon-jest-matchers": "^0.1.14",

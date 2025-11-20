@@ -1,3 +1,7 @@
+## 2.0.2
+
+fix background with delay with debounce
+
 ## 2.0.1
 
 bump glob to close dependabot alert

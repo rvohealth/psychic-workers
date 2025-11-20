@@ -214,7 +214,17 @@ describe('a backgrounded service', () => {
             args: ['bottlearum'],
             method: 'classRunInBG',
           },
-          { delay: 7000, jobId: 'myjob', priority: priorityLevel },
+          {
+            deduplication: {
+              extend: true,
+              id: 'myjob',
+              replace: true,
+              ttl: 7000,
+            },
+            delay: 7000,
+            jobId: 'myjob',
+            priority: priorityLevel,
+          },
         )
       }
 
@@ -294,7 +304,17 @@ describe('a backgrounded service', () => {
             importKey: undefined,
             method: 'classRunInBG',
           },
-          { delay: 7000, jobId: 'myjob', group: { id: 'snazzy', priority: 4 } },
+          {
+            deduplication: {
+              extend: true,
+              id: 'myjob',
+              replace: true,
+              ttl: 7000,
+            },
+            delay: 7000,
+            jobId: 'myjob',
+            group: { id: 'snazzy', priority: 4 },
+          },
         )
       })
     })

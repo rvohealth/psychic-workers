@@ -738,10 +738,23 @@ export class Background {
 
     if (!queueInstance) throw new Error(`missing queue: ${jobConfig?.queue?.toString() || 'N/A'}`)
 
+    const jobOptions: Partial<JobsOptions> = {}
+
+    if (jobId) jobOptions.jobId = jobId
+    if (delay) jobOptions.delay = delay
+
+    if (delay && jobId) {
+      jobOptions.deduplication = {
+        id: jobId,
+        ttl: delay,
+        extend: true,
+        replace: true,
+      }
+    }
+
     if (groupId && priority) {
       await queueInstance.add(jobType, jobData, {
-        delay,
-        jobId,
+        ...jobOptions,
         group: {
           ...this.groupIdToGroupConfig(groupId),
           priority: this.mapPriorityWordToPriorityNumber(priority),
@@ -751,8 +764,7 @@ export class Background {
       //
     } else {
       await queueInstance.add(jobType, jobData, {
-        delay,
-        jobId,
+        ...jobOptions,
         group: this.groupIdToGroupConfig(groupId),
         priority: this.mapPriorityWordToPriorityNumber(priority),
         // explicitly typing as JobsOptions because Psychic can't be aware of BullMQ Pro options
