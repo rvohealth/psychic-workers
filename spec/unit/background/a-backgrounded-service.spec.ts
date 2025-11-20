@@ -222,7 +222,6 @@ describe('a backgrounded service', () => {
               ttl: 7000,
             },
             delay: 7000,
-            jobId: 'myjob',
             priority: priorityLevel,
           },
         )
@@ -312,7 +311,6 @@ describe('a backgrounded service', () => {
               ttl: 7000,
             },
             delay: 7000,
-            jobId: 'myjob',
             group: { id: 'snazzy', priority: 4 },
           },
         )

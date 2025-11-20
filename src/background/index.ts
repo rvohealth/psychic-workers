@@ -740,7 +740,6 @@ export class Background {
 
     const jobOptions: Partial<JobsOptions> = {}
 
-    if (jobId) jobOptions.jobId = jobId
     if (delay) jobOptions.delay = delay
 
     if (delay && jobId) {
