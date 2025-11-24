@@ -1,9 +1,9 @@
 import BaseScheduledService from '../../../../src/background/BaseScheduledService.js'
-import psychicTypes from '../../types/psychic.js'
+import { psychicWorkerTypes } from '../../types/workers.js'
 
 export default class ApplicationScheduledService extends BaseScheduledService {
-  public override get psychicTypes() {
-    return psychicTypes
+  public override get psychicWorkerTypes() {
+    return psychicWorkerTypes
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

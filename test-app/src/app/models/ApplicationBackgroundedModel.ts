@@ -3,7 +3,7 @@ import { BackgroundJobConfig } from '../../../../src/types/background.js'
 import { DBClass } from '../../types/db.js'
 import { globalTypeConfig } from '../../types/dream.globals.js'
 import { connectionTypeConfig, schema } from '../../types/dream.js'
-import psychicTypes from '../../types/psychic.js'
+import { psychicWorkerTypes } from '../../types/workers.js'
 
 export default class ApplicationBackgroundedModel extends BaseBackgroundedModel {
   declare public DB: DBClass
@@ -20,8 +20,8 @@ export default class ApplicationBackgroundedModel extends BaseBackgroundedModel 
     return globalTypeConfig
   }
 
-  public override get psychicTypes() {
-    return psychicTypes
+  public override get psychicWorkerTypes() {
+    return psychicWorkerTypes
   }
 
   public static override get backgroundJobConfig(): BackgroundJobConfig<BaseBackgroundedModel> {

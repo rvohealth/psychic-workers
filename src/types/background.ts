@@ -71,13 +71,13 @@ interface BaseBackgroundJobConfig {
 
 export interface WorkstreamBackgroundJobConfig<T extends BaseScheduledService | BaseBackgroundedService>
   extends BaseBackgroundJobConfig {
-  workstream?: T['psychicTypes']['workstreamNames'][number]
+  workstream?: T['psychicWorkerTypes']['workstreamNames'][number]
 }
 
 export interface QueueBackgroundJobConfig<
   T extends BaseScheduledService | BaseBackgroundedService,
-  PsyTypes extends T['psychicTypes'] = T['psychicTypes'],
-  QueueGroupMap = PsyTypes['queueGroupMap'],
+  WorkerTypes extends T['psychicWorkerTypes'] = T['psychicWorkerTypes'],
+  QueueGroupMap = WorkerTypes['queueGroupMap'],
   Queue extends keyof QueueGroupMap & string = keyof QueueGroupMap & string,
   Groups extends QueueGroupMap[Queue] = QueueGroupMap[Queue],
   GroupId = Groups[number & keyof Groups],
