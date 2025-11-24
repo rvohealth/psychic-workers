@@ -1,3 +1,7 @@
+## 2.1.0
+
+- add custom AST type builder to create custom types file for psychic workers, rather than piggy-backing off of psychic type builder, since that functionality is soon to be removed. This creates breaking changes at the type layer, so an automated script was added to refactor deprecated code to match the new type import location.
+
 ## 2.0.2
 
 fix background with delay with debounce

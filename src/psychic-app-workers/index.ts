@@ -1,9 +1,11 @@
 import { PsychicApp } from '@rvoh/psychic'
 import { Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
 import { Cluster, Redis } from 'ioredis'
-import { cachePsychicWorkersApp, getCachedPsychicWorkersAppOrFail } from './cache.js'
 import background from '../background/index.js'
+import ASTWorkersSchemaBuilder from '../cli/ASTWorkersSchemaBuilder.js'
+import PsychicTypesDeprecation from '../cli/PsychicTypesDeprecation.js'
 import { PsychicBackgroundOptions } from '../types/background.js'
+import { cachePsychicWorkersApp, getCachedPsychicWorkersAppOrFail } from './cache.js'
 
 export default class PsychicAppWorkers {
   public static async init(psychicApp: PsychicApp, cb: (app: PsychicAppWorkers) => void | Promise<void>) {
@@ -11,15 +13,9 @@ export default class PsychicAppWorkers {
 
     await cb(psychicWorkersApp)
 
-    psychicApp.on('cli:sync', () => {
-      background.connect()
-
-      const output = {
-        workstreamNames: [...background['workstreamNames']],
-        queueGroupMap: { ...background['groupNames'] },
-      } as PsychicWorkersTypeSync
-
-      return output
+    psychicApp.on('cli:sync', async () => {
+      await new ASTWorkersSchemaBuilder().build()
+      await new PsychicTypesDeprecation().deprecate()
     })
 
     psychicApp.on('server:shutdown', async () => {
@@ -74,6 +70,17 @@ export default class PsychicAppWorkers {
   }
   private _testInvocation: PsychicWorkersAppTestInvocationType = 'automatic'
 
+  /**
+   * if set to true, it will bypass deprecation checks that run
+   * during the sync hook. Defaults to false, we only recommend
+   * overriding this if you are having issues with the deprecation
+   * check.
+   */
+  public get bypassDeprecationChecks() {
+    return this._bypassDeprecationChecks
+  }
+  private _bypassDeprecationChecks: boolean = false
+
   private _hooks: PsychicWorkersAppHooks = {
     workerShutdown: [],
   }
@@ -101,7 +108,9 @@ export default class PsychicAppWorkers {
       ? PsychicBackgroundOptions
       : Opt extends 'testInvocation'
         ? PsychicWorkersAppTestInvocationType
-        : unknown,
+        : Opt extends 'bypassDeprecationChecks'
+          ? boolean
+          : unknown,
   ) {
     switch (option) {
       case 'background':
@@ -121,6 +130,10 @@ export default class PsychicAppWorkers {
         this._testInvocation = value as PsychicWorkersAppTestInvocationType
         break
 
+      case 'bypassDeprecationChecks':
+        this._bypassDeprecationChecks = value as boolean
+        break
+
       default:
         throw new Error(`Unhandled option type passed to PsychicWorkersApp#set: ${option}`)
     }
@@ -132,7 +145,7 @@ export interface PsychicWorkersTypeSync {
   queueGroupMap: Record<string, string[]>
 }
 
-export type PsychicWorkersAppOption = 'background' | 'testInvocation'
+export type PsychicWorkersAppOption = 'background' | 'testInvocation' | 'bypassDeprecationChecks'
 
 export type PsychicWorkersAppTestInvocationType = 'automatic' | 'manual'
 

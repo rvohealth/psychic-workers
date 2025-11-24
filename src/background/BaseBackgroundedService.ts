@@ -124,8 +124,10 @@ export default class BaseBackgroundedService {
    * in psychic-workers.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public get psychicTypes(): any {
-    throw new Error('Must define psychicTypes getter in BackgroundedService class within your application')
+  public get psychicWorkerTypes(): any {
+    throw new Error(
+      'Must define psychicWorkerTypes getter in ApplicationBackgroundedService class within your application',
+    )
   }
 }
 
