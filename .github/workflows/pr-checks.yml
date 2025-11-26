@@ -28,7 +28,7 @@ jobs:
         env:
           POSTGRES_USER: psychic
           POSTGRES_DB: psychic_workers_test
-          POSTGRES_PASSWORD: 'postgres'
+          POSTGRES_PASSWORD: "postgres"
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -61,16 +61,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "24"
 
-      - run: npm install -g corepack
       - run: corepack enable
-
-      - run: "echo \"nodeLinker: node-modules\" > ./.yarnrc.yml"
-      - run: "echo -e \"npmScopes:\" >> ./.yarnrc.yml"
-      - run: "echo -e \"  rvohealth:\" >> ./.yarnrc.yml"
-      - run: "echo -e \"    npmAuthToken: '${{ secrets.GITHUB_TOKEN }}'\" >> ./.yarnrc.yml"
-      - run: "echo -e \"    npmRegistryServer: 'https://npm.pkg.github.com'\" >> ./.yarnrc.yml"
 
       - name: Cache node_modules
         id: cache-node-modules
@@ -98,16 +91,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "24"
 
-      - run: npm install -g corepack
       - run: corepack enable
-
-      - run: "echo \"nodeLinker: node-modules\" > ./.yarnrc.yml"
-      - run: "echo -e \"npmScopes:\" >> ./.yarnrc.yml"
-      - run: "echo -e \"  rvohealth:\" >> ./.yarnrc.yml"
-      - run: "echo -e \"    npmAuthToken: '${{ secrets.GITHUB_TOKEN }}'\" >> ./.yarnrc.yml"
-      - run: "echo -e \"    npmRegistryServer: 'https://npm.pkg.github.com'\" >> ./.yarnrc.yml"
 
       - name: Cache node_modules
         id: cache-node-modules
@@ -136,16 +122,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "24"
 
-      - run: npm install -g corepack
       - run: corepack enable
-
-      - run: "echo \"nodeLinker: node-modules\" > ./.yarnrc.yml"
-      - run: "echo -e \"npmScopes:\" >> ./.yarnrc.yml"
-      - run: "echo -e \"  rvohealth:\" >> ./.yarnrc.yml"
-      - run: "echo -e \"    npmAuthToken: '${{ secrets.GITHUB_TOKEN }}'\" >> ./.yarnrc.yml"
-      - run: "echo -e \"    npmRegistryServer: 'https://npm.pkg.github.com'\" >> ./.yarnrc.yml"
 
       - name: Cache node_modules
         id: cache-node-modules
