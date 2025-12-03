@@ -48,9 +48,8 @@ export default class PsychicTypesDeprecation {
               await fs.writeFile(
                 file,
                 fileContent
-                  .replace(/import psychicTypes/, 'import { psychicWorkerTypes }')
                   .replace(/psychicTypes/g, 'psychicWorkerTypes')
-                  .replace(/types\/psychic\.js'/, "types/workers.js'"),
+                  .replace(/types\/psychic\.js/, 'types/workers.js'),
               )
             },
           )

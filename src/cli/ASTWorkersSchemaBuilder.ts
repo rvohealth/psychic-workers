@@ -19,9 +19,7 @@ export default class ASTWorkersSchemaBuilder extends ASTBuilder {
     const sourceFile = ts.createSourceFile('', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS)
 
     await logger.logProgress('[psychic workers] building workers types', async () => {
-      const output = await this.prettier(
-        this.printStatements([this.buildWorkersTypeConfigConst()], sourceFile),
-      )
+      const output = await this.prettier(this.printStatements(this.buildWorkersTypeConfigConst(), sourceFile))
 
       await CliFileWriter.write(this.workersSchemaPath(), output)
     })
@@ -73,7 +71,7 @@ export default class ASTWorkersSchemaBuilder extends ASTBuilder {
     )
 
     const psychicWorkerTypesObjectLiteralConst = f.createVariableStatement(
-      [f.createModifier(ts.SyntaxKind.ExportKeyword)],
+      undefined,
       f.createVariableDeclarationList(
         [
           f.createVariableDeclaration(
@@ -87,7 +85,10 @@ export default class ASTWorkersSchemaBuilder extends ASTBuilder {
       ),
     )
 
-    return psychicWorkerTypesObjectLiteralConst
+    const defaultExportIdentifier = f.createIdentifier('psychicWorkerTypes')
+    const exportDefaultStatement = f.createExportDefault(defaultExportIdentifier)
+
+    return [psychicWorkerTypesObjectLiteralConst, this.newLine(), exportDefaultStatement]
   }
 
   /**
