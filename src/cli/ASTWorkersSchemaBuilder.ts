@@ -48,7 +48,7 @@ export default class ASTWorkersSchemaBuilder extends ASTBuilder {
         ),
 
         f.createPropertyAssignment(
-          f.createIdentifier('groupNames'),
+          f.createIdentifier('queueGroupMap'),
           f.createObjectLiteralExpression(
             Object.keys(background['groupNames']).map(key =>
               f.createPropertyAssignment(

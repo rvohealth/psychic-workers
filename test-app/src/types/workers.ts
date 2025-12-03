@@ -1,4 +1,4 @@
 export const psychicWorkerTypes = {
   workstreamNames: ['snazzy'],
-  groupNames: {},
+  queueGroupMap: {},
 } as const
