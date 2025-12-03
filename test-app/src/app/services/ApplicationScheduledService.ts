@@ -1,5 +1,5 @@
 import BaseScheduledService from '../../../../src/background/BaseScheduledService.js'
-import { psychicWorkerTypes } from '../../types/workers.js'
+import psychicWorkerTypes from '../../types/workers.js'
 
 export default class ApplicationScheduledService extends BaseScheduledService {
   public override get psychicWorkerTypes() {
