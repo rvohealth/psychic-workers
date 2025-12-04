@@ -38,17 +38,17 @@
     "dist/**/*"
   ],
   "scripts": {
-    "psy": "NODE_ENV=${NODE_ENV:-test} yarn psy:ts",
+    "psy": "NODE_ENV=${NODE_ENV:-test} pnpm psy:ts",
     "psy:js": "node ./dist/test-app/src/cli/index.js",
     "psy:ts": "tsx ./test-app/src/cli/index.ts",
     "build": "echo \"building cjs...\" && rm -rf dist && npx tsc -p ./tsconfig.cjs.build.json && echo \"building esm...\" && npx tsc -p ./tsconfig.esm.build.json",
     "build:test-app": "rm -rf dist && echo \"building test app to esm...\" && npx tsc -p ./tsconfig.esm.build.test-app.json && echo \"building test app to cjs...\" && npx tsc -p ./tsconfig.cjs.build.test-app.json",
     "uspec": "vitest --config ./spec/unit/vite.config.ts",
-    "format": "yarn run prettier . --write",
-    "lint": "yarn run eslint --no-warn-ignored \"src/**/*.ts\" && yarn run prettier . --check",
+    "format": "pnpm prettier . --write",
+    "lint": "pnpm eslint --no-warn-ignored \"src/**/*.ts\" && pnpm prettier . --check",
     "console": "tsx ./src/conf/repl.ts",
     "console:js": "node ./dist/src/conf/repl.js",
-    "prepack": "yarn build",
+    "prepack": "pnpm build",
     "dev-worker": "NODE_ENV=development WORKER_COUNT=1 tsx ./test-app/worker.ts"
   },
   "peerDependencies": {
@@ -65,16 +65,17 @@
     "@rvoh/psychic-spec-helpers": "^1.1.3",
     "@socket.io/redis-adapter": "^8.3.0",
     "@socket.io/redis-emitter": "^5.1.0",
-    "@types/express": "^4",
-    "@types/node": "^22.5.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.12.0",
     "@types/pg": "^8",
     "@types/supertest": "^6.0.3",
+    "@typescript-eslint/parser": "^8.48.1",
     "bullmq": "^5.64.0",
     "eslint": "^9.9.1",
-    "express": "^4.21.2",
+    "express": "^5.2.1",
     "ioredis": "^5.8.2",
     "kysely": "^0.28.7",
-    "kysely-codegen": "^0.17.0",
+    "kysely-codegen": "^0.19.0",
     "luxon-jest-matchers": "^0.1.14",
     "openapi-typescript": "^7.9.1",
     "pg": "^8.13.1",
@@ -86,8 +87,13 @@
     "tsx": "^4.20.6",
     "typedoc": "^0.28.15",
     "typescript": "^5.8.2",
-    "typescript-eslint": "=7.18.0",
+    "typescript-eslint": "^8.48.1",
     "vitest": "^4.0.10"
   },
-  "packageManager": "yarn@4.7.0"
+  "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a",
+  "dependencies": {
+    "commander": "^14.0.2",
+    "dotenv": "^17.2.3",
+    "pluralize-esm": "^9.0.5"
+  }
 }

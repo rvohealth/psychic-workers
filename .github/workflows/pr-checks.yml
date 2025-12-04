@@ -65,27 +65,15 @@ jobs:
 
       - run: corepack enable
 
-      - name: Cache node_modules
-        id: cache-node-modules
-        uses: actions/cache@v4
-        with:
-          path: ~/.yarn-cache
-          key: ${{ runner.os }}-cache-node-modules-${{ hashFiles('**/yarn.lock') }}
-
-      - if: ${{ steps.cache-node-modules.outputs.cache-hit != 'true' }}
-        name: List the state of node modules
-        continue-on-error: true
-        run: yarn list
-      - run: yarn install --immutable
-      - run: yarn psy db:migrate --skip-sync
-      - run: yarn uspec
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm psy db:migrate --skip-sync
+      - run: pnpm uspec
 
   lint:
     name: Linting
     runs-on: ubuntu-latest
     env:
       NODE_ENV: development
-      YARN_CACHE_FOLDER: ~/.yarn-cache
       GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -95,27 +83,14 @@ jobs:
 
       - run: corepack enable
 
-      - name: Cache node_modules
-        id: cache-node-modules
-        uses: actions/cache@v4
-        with:
-          path: ~/.yarn-cache
-          key: ${{ runner.os }}-cache-node-modules-${{ hashFiles('**/yarn.lock') }}
-
-      - if: ${{ steps.cache-node-modules.outputs.cache-hit != 'true' }}
-        name: List the state of node modules
-        continue-on-error: true
-        run: yarn list
-
-      - run: yarn install --immutable
-      - run: yarn lint
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
 
   check-build:
     name: Check build
     runs-on: ubuntu-latest
     env:
       NODE_ENV: development
-      YARN_CACHE_FOLDER: ~/.yarn-cache
       GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
@@ -126,17 +101,5 @@ jobs:
 
       - run: corepack enable
 
-      - name: Cache node_modules
-        id: cache-node-modules
-        uses: actions/cache@v4
-        with:
-          path: ~/.yarn-cache
-          key: ${{ runner.os }}-cache-node-modules-${{ hashFiles('**/yarn.lock') }}
-
-      - if: ${{ steps.cache-node-modules.outputs.cache-hit != 'true' }}
-        name: List the state of node modules
-        continue-on-error: true
-        run: yarn list
-
-      - run: yarn install --immutable
-      - run: yarn build
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build

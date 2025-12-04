@@ -11,7 +11,7 @@ export default async (psy: PsychicApp) => {
   await psy.load('services', srcPath('app', 'services'), path => importDefault(path))
 
   psy.set('appName', 'testapp')
-  psy.set('packageManager', 'yarn')
+  psy.set('packageManager', 'pnpm')
   psy.set('apiOnly', false)
   psy.set('apiRoot', srcPath('..', '..'))
   psy.set('inflections', inflections)
