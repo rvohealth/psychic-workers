@@ -103,3 +103,61 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+
+  check-no-sync-diff:
+    name: Ensure no sync diffs
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: psychic
+          POSTGRES_DB: psychic_workers_test
+          POSTGRES_PASSWORD: "postgres"
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:6.2
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    env:
+      NODE_ENV: test
+      PORT: 7777
+      DB_USER: psychic
+      DB_NAME: psychic_workers_test
+      DB_HOST: localhost
+      DB_PASSWORD: postgres
+      DB_PORT: 5432
+      TZ: UTC
+      GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      APP_ENCRYPTION_KEY: ${{ secrets.APP_ENCRYPTION_KEY }}
+      LEGACY_APP_ENCRYPTION_KEY: ${{ secrets.LEGACY_APP_ENCRYPTION_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm psy db:migrate --skip-sync
+      - run: pnpm psy sync
+      - name: Check for sync differences
+        run: |
+          if [ -n "$(git diff)" ]; then
+            echo "Error: 'pnpm psy sync' produced changes. Please run 'pnpm psy sync' locally and commit the changes."
+            echo "Changes detected:"
+            git diff
+            exit 1
+          else
+            echo "No changes detected after sync - all good!"
+          fi
