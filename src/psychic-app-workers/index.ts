@@ -234,6 +234,7 @@ interface PsychicBackgroundSharedOptions {
   }
 
   defaultBullMQQueueOptions?: Omit<QueueOptions, 'connection'>
+  defaultBullMQWorkerOptions?: Omit<WorkerOptions, 'connection'>
 }
 
 // QueueOptionsWithConnectionInstance instead of QueueOptions because we need to be able to

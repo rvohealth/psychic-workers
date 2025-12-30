@@ -1,3 +1,7 @@
+## 2.2.0
+
+- support defaultBullMQWorkerOptions (https://api.docs.bullmq.io/interfaces/v5.WorkerOptions.html), even with simple queue configuration
+
 ## 2.1.0
 
 - add custom AST type builder to create custom types file for psychic workers, rather than piggy-backing off of psychic type builder, since that functionality is soon to be removed. This creates breaking changes at the type layer, so an automated script was added to refactor deprecated code to match the new type import location.

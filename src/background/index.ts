@@ -278,6 +278,7 @@ export class Background {
         this._workers.push(
           new Background.Worker(formattedQueueName, async job => await this.doWork(job), {
             autorun: !EnvInternal.isTest,
+            ...backgroundOptions.defaultBullMQWorkerOptions,
             connection: defaultWorkerConnection,
             concurrency: backgroundOptions.defaultWorkstream?.concurrency || DEFAULT_CONCURRENCY,
           }),
@@ -331,6 +332,7 @@ export class Background {
           this._workers.push(
             new Background.Worker(namedWorkstreamFormattedQueueName, async job => await this.doWork(job), {
               autorun: !EnvInternal.isTest,
+              ...backgroundOptions.defaultBullMQWorkerOptions,
               group: {
                 id: namedWorkstream.name,
                 limit: namedWorkstream.rateLimit,
@@ -394,7 +396,7 @@ export class Background {
     //////////////////////////
     this.defaultQueue = new Background.Queue(formattedQueueName, {
       ...defaultBullMQQueueOptions,
-      ...(nativeBullMQ.defaultQueueOptions || {}),
+      ...nativeBullMQ.defaultQueueOptions,
       connection: defaultQueueConnection,
     })
     ///////////////////////////////
@@ -412,7 +414,8 @@ export class Background {
         this._workers.push(
           new Background.Worker(formattedQueueName, async job => await this.doWork(job), {
             autorun: !EnvInternal.isTest,
-            ...(backgroundOptions.nativeBullMQ.defaultWorkerOptions || {}),
+            ...backgroundOptions.defaultBullMQWorkerOptions,
+            ...backgroundOptions.nativeBullMQ.defaultWorkerOptions,
             connection: defaultWorkerConnection,
           }),
         )
@@ -467,6 +470,7 @@ export class Background {
           this._workers.push(
             new Background.Worker(formattedQueuename, async job => await this.doWork(job), {
               autorun: !EnvInternal.isTest,
+              ...backgroundOptions.defaultBullMQWorkerOptions,
               ...extraWorkerOptions,
               connection: namedWorkerConnection,
             }),
