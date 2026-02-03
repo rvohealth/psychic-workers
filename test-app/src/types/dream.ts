@@ -1,4 +1,3 @@
-
 /*
 
                                     ,▄█▄                 
@@ -58,7 +57,7 @@ us humans, he says:
 */
 
 import { type CalendarDate, type DateTime } from '@rvoh/dream'
-
+import {} from './db.js'
 
 export const schema = {
   users: {
@@ -107,9 +106,7 @@ export const schema = {
       },
     },
     virtualColumns: [],
-    associations: {
-      
-    },
+    associations: {},
   },
 } as const
 
@@ -118,7 +115,7 @@ export const connectionTypeConfig = {
   allDefaultScopeNames: [],
   globalNames: {
     models: {
-      'User': 'users'
+      User: 'users',
     },
   },
 } as const
