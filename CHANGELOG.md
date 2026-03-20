@@ -1,3 +1,7 @@
+## 2.3.0
+
+support psychic v3
+
 ## 2.2.0
 
 - support defaultBullMQWorkerOptions (https://api.docs.bullmq.io/interfaces/v5.WorkerOptions.html), even with simple queue configuration

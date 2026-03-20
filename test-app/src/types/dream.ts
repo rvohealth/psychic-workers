@@ -56,7 +56,12 @@ us humans, he says:
 
 */
 
-import { type CalendarDate, type DateTime } from '@rvoh/dream'
+import {
+  type CalendarDate,
+  type DateTime,
+  type ClockTime,
+  type ClockTimeTz,
+} from '@rvoh/dream'
 import {} from './db.js'
 
 export const schema = {
