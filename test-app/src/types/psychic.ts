@@ -1,7 +1,5 @@
 const psychicTypes = {
-  "openapiNames": [
-    "default"
-  ]
+  openapiNames: ['default'],
 } as const
 
 export default psychicTypes
