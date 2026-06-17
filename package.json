@@ -4,6 +4,9 @@
   "description": "Background job system for Psychic applications",
   "version": "2.3.0",
   "author": "RVO Health",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rvohealth/psychic-workers.git"
