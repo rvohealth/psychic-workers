@@ -1,4 +1,4 @@
-## 2.4.0
+## 2.3.1
 
 - switch to Github action publishing to npmjs.com
 
