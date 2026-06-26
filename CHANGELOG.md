@@ -1,3 +1,7 @@
+## 2.4.0
+
+- switch to Github action publishing to npmjs.com
+
 ## 2.3.0
 
 support psychic v3
