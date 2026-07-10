@@ -1,3 +1,9 @@
+## 2.4.0
+
+- fix: worker processes started via `background.work()` now exit with code 1 after an `uncaughtException` or `unhandledRejection` (after best-effort graceful shutdown bounded by a 15s timeout), so orchestrators restart them instead of leaving a broken process alive
+- fix: a failing or hung graceful shutdown on SIGTERM/SIGINT now logs and exits with code 1 instead of leaving the process ignoring signals until SIGKILL; clean shutdown still exits 0
+- fix: one rejecting `worker.close()` no longer aborts closing the remaining workers and quitting redis connections during shutdown
+
 ## 2.3.2
 
 - upgrade to pnpm@11.9.0; add strictDepBuilds: false and deny esbuild/msgpackr-extract/puppeteer build scripts in pnpm-workspace.yaml
