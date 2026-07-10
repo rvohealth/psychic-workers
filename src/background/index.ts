@@ -200,7 +200,14 @@ export class Background {
   private fatalErrorShutdownBegun = false
 
   private async shutdownAndExit() {
-    await this.shutdown()
+    try {
+      await this.shutdownWithTimeout()
+    } catch (error) {
+      PsychicApp.logWithLevel('error', '[psychic-workers] error during graceful shutdown:', error)
+      process.exit(1)
+      return
+    }
+
     // https://docs.bullmq.io/guide/going-to-production#gracefully-shut-down-workers
     process.exit(0)
   }
@@ -572,16 +579,12 @@ export class Background {
       if (!EnvInternal.isTest) PsychicApp.log('[psychic-workers] handle SIGTERM')
 
       void this.shutdownAndExit()
-        .then(() => {})
-        .catch(() => {})
     })
 
     process.on('SIGINT', () => {
       if (!EnvInternal.isTest) PsychicApp.log('[psychic-workers] handle SIGINT')
 
       void this.shutdownAndExit()
-        .then(() => {})
-        .catch(() => {})
     })
 
     this.connect({ activateWorkers: true })

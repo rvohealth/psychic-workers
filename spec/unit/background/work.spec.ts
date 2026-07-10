@@ -99,4 +99,40 @@ describe('Background#work process event handling', () => {
       expect(shutdownSpy).toHaveBeenCalled()
     })
   })
+
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    context(signal, () => {
+      it('exits with code 0 after clean graceful shutdown', async () => {
+        const shutdownSpy = vi.spyOn(backgroundInstance, 'shutdown').mockResolvedValue(undefined)
+
+        handlers[signal]!()
+
+        await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(0))
+        expect(shutdownSpy).toHaveBeenCalled()
+      })
+
+      context('when graceful shutdown rejects', () => {
+        it('exits with code 1 instead of leaving the process alive', async () => {
+          vi.spyOn(backgroundInstance, 'shutdown').mockRejectedValue(new Error('shutdown failure'))
+
+          handlers[signal]!()
+
+          await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1))
+        })
+      })
+
+      context('when graceful shutdown hangs', () => {
+        it('exits with code 1 once the shutdown timeout elapses', async () => {
+          vi.useFakeTimers()
+          vi.spyOn(backgroundInstance, 'shutdown').mockImplementation(() => new Promise(() => {}))
+
+          handlers[signal]!()
+
+          await vi.advanceTimersByTimeAsync(Background.SHUTDOWN_TIMEOUT_MS)
+          expect(exitSpy).toHaveBeenCalledWith(1)
+          vi.useRealTimers()
+        })
+      })
+    })
+  }
 })
