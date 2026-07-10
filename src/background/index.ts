@@ -283,7 +283,12 @@ export class Background {
     if (!EnvInternal.isTest) PsychicApp.log(`[psychic-workers] closeAllRedisConnections`)
 
     for (const worker of this.workers) {
-      await worker.close()
+      try {
+        await worker.close()
+      } catch (error) {
+        if (!EnvInternal.isTest)
+          PsychicApp.logWithLevel('error', `[psychic-workers] error closing worker:`, error)
+      }
     }
 
     for (const connection of this.redisConnections) {
