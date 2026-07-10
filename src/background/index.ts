@@ -15,6 +15,7 @@ import ActivatingBackgroundWorkersWithoutDefaultWorkerConnection from '../error/
 import ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection from '../error/background/ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection.js'
 import DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
 import NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
+import NoClassForSpecifiedGlobalName from '../error/background/NoClassForSpecifiedGlobalName.js'
 import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName.js'
 import NoQueueForSpecifiedWorkstream from '../error/background/NoQueueForSpecifiedWorkstream.js'
 import EnvInternal from '../helpers/EnvInternal.js'
@@ -913,25 +914,26 @@ export class Background {
           objectClass = PsychicApp.lookupClassByGlobalName(globalName)
         }
 
-        if (!objectClass) return
+        if (!objectClass) throw new NoClassForSpecifiedGlobalName(globalName)
 
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await objectClass[method!](...args, job)
         break
 
-      case 'BackgroundJobQueueModelInstanceJob':
+      case 'BackgroundJobQueueModelInstanceJob': {
         if (globalName) {
           dreamClass = PsychicApp.lookupClassByGlobalName(globalName) as typeof Dream | undefined
         }
 
-        if (dreamClass) {
-          const modelInstance = await dreamClass.connection('primary').find(id)
-          if (!modelInstance) return
+        if (!dreamClass) throw new NoClassForSpecifiedGlobalName(globalName)
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          await (modelInstance as any)[method!](...args, job)
-        }
+        const modelInstance = await dreamClass.connection('primary').find(id)
+        if (!modelInstance) return
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        await (modelInstance as any)[method!](...args, job)
         break
+      }
     }
   }
 }
