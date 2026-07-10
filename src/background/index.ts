@@ -200,16 +200,17 @@ export class Background {
   private fatalErrorShutdownBegun = false
 
   private async shutdownAndExit() {
+    let exitCode = 0
+
     try {
       await this.shutdownWithTimeout()
     } catch (error) {
       PsychicApp.logWithLevel('error', '[psychic-workers] error during graceful shutdown:', error)
-      process.exit(1)
-      return
+      exitCode = 1
     }
 
     // https://docs.bullmq.io/guide/going-to-production#gracefully-shut-down-workers
-    process.exit(0)
+    process.exit(exitCode)
   }
 
   /**
@@ -220,20 +221,18 @@ export class Background {
    * then exit nonzero so orchestrators know to restart the process
    */
   private async shutdownAndExitAfterFatalError() {
-    if (this.fatalErrorShutdownBegun) {
-      process.exit(1)
-      return
-    }
-    this.fatalErrorShutdownBegun = true
+    if (!this.fatalErrorShutdownBegun) {
+      this.fatalErrorShutdownBegun = true
 
-    try {
-      await this.shutdownWithTimeout()
-    } catch (error) {
-      PsychicApp.logWithLevel(
-        'error',
-        '[psychic-workers] error during graceful shutdown after fatal error:',
-        error,
-      )
+      try {
+        await this.shutdownWithTimeout()
+      } catch (error) {
+        PsychicApp.logWithLevel(
+          'error',
+          '[psychic-workers] error during graceful shutdown after fatal error:',
+          error,
+        )
+      }
     }
 
     process.exit(1)
