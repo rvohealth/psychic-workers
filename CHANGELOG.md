@@ -3,6 +3,7 @@
 - fix: worker processes started via `background.work()` now exit with code 1 after an `uncaughtException` or `unhandledRejection` (after best-effort graceful shutdown bounded by a 15s timeout), so orchestrators restart them instead of leaving a broken process alive
 - fix: a failing or hung graceful shutdown on SIGTERM/SIGINT now logs and exits with code 1 instead of leaving the process ignoring signals until SIGKILL; clean shutdown still exits 0
 - fix: one rejecting `worker.close()` no longer aborts closing the remaining workers and quitting redis connections during shutdown
+- `doWork` now throws `NoClassForSpecifiedGlobalName` (exported from `@rvoh/psychic-workers/errors`) when a job's `globalName` no longer resolves to a class, so the job lands in BullMQ's failed set instead of silently completing. Previously, after a class rename/removal, queued jobs and repeating job schedulers referencing the old name would no-op forever with no log, failure, or metric. When the class resolves but the model instance is not found, the job still completes quietly (the record may have been legitimately deleted).
 
 ## 2.3.2
 
