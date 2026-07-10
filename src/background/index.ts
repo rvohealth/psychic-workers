@@ -181,10 +181,78 @@ export class Background {
     return [...this._workers]
   }
 
+  /**
+   * @internal
+   *
+   * the maximum number of milliseconds graceful shutdown is allowed
+   * to run before the process exits anyway, so that a hung hook,
+   * db close, or worker close can never keep a dying process alive
+   */
+  public static readonly SHUTDOWN_TIMEOUT_MS = 15000
+
+  /**
+   * @internal
+   *
+   * set once a fatal error has begun graceful cleanup, so that a
+   * second fatal error during cleanup exits immediately instead of
+   * attempting cleanup again
+   */
+  private fatalErrorShutdownBegun = false
+
   private async shutdownAndExit() {
     await this.shutdown()
     // https://docs.bullmq.io/guide/going-to-production#gracefully-shut-down-workers
     process.exit(0)
+  }
+
+  /**
+   * @internal
+   *
+   * after an uncaught exception or unhandled rejection, attempt
+   * best-effort graceful cleanup (bounded by SHUTDOWN_TIMEOUT_MS),
+   * then exit nonzero so orchestrators know to restart the process
+   */
+  private async shutdownAndExitAfterFatalError() {
+    if (this.fatalErrorShutdownBegun) {
+      process.exit(1)
+      return
+    }
+    this.fatalErrorShutdownBegun = true
+
+    try {
+      await this.shutdownWithTimeout()
+    } catch (error) {
+      PsychicApp.logWithLevel(
+        'error',
+        '[psychic-workers] error during graceful shutdown after fatal error:',
+        error,
+      )
+    }
+
+    process.exit(1)
+  }
+
+  /**
+   * @internal
+   *
+   * runs {@link Background.shutdown}, rejecting if it has not settled
+   * within SHUTDOWN_TIMEOUT_MS
+   */
+  private async shutdownWithTimeout() {
+    await Promise.race([
+      this.shutdown(),
+      new Promise<never>((_, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `[psychic-workers] graceful shutdown timed out after ${Background.SHUTDOWN_TIMEOUT_MS}ms`,
+              ),
+            ),
+          Background.SHUTDOWN_TIMEOUT_MS,
+        ).unref()
+      }),
+    ])
   }
 
   /**
@@ -491,11 +559,13 @@ export class Background {
    */
   public work() {
     process.on('uncaughtException', (error: Error) => {
-      PsychicApp.log('[psychic-workers] uncaughtException:', error)
+      PsychicApp.logWithLevel('error', '[psychic-workers] uncaughtException:', error)
+      void this.shutdownAndExitAfterFatalError()
     })
 
-    process.on('unhandledRejection', (error: Error) => {
-      PsychicApp.log('[psychic-workers] unhandledRejection:', error)
+    process.on('unhandledRejection', (reason: unknown) => {
+      PsychicApp.logWithLevel('error', '[psychic-workers] unhandledRejection:', reason)
+      void this.shutdownAndExitAfterFatalError()
     })
 
     process.on('SIGTERM', () => {
