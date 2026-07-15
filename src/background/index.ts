@@ -15,6 +15,7 @@ import ActivatingBackgroundWorkersWithoutDefaultWorkerConnection from '../error/
 import ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection from '../error/background/ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection.js'
 import DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
 import NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
+import NoClassForSpecifiedGlobalName from '../error/background/NoClassForSpecifiedGlobalName.js'
 import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName.js'
 import NoQueueForSpecifiedWorkstream from '../error/background/NoQueueForSpecifiedWorkstream.js'
 import EnvInternal from '../helpers/EnvInternal.js'
@@ -181,10 +182,84 @@ export class Background {
     return [...this._workers]
   }
 
+  /**
+   * @internal
+   *
+   * the maximum number of milliseconds graceful shutdown is allowed
+   * to run before the process exits anyway, so that a hung hook,
+   * db close, or worker close can never keep a dying process alive
+   */
+  public static readonly SHUTDOWN_TIMEOUT_MS = 15000
+
+  /**
+   * @internal
+   *
+   * set once a fatal error has begun graceful cleanup, so that a
+   * second fatal error during cleanup exits immediately instead of
+   * attempting cleanup again
+   */
+  private fatalErrorShutdownBegun = false
+
   private async shutdownAndExit() {
-    await this.shutdown()
+    let exitCode = 0
+
+    try {
+      await this.shutdownWithTimeout()
+    } catch (error) {
+      PsychicApp.logWithLevel('error', '[psychic-workers] error during graceful shutdown:', error)
+      exitCode = 1
+    }
+
     // https://docs.bullmq.io/guide/going-to-production#gracefully-shut-down-workers
-    process.exit(0)
+    process.exit(exitCode)
+  }
+
+  /**
+   * @internal
+   *
+   * after an uncaught exception or unhandled rejection, attempt
+   * best-effort graceful cleanup (bounded by SHUTDOWN_TIMEOUT_MS),
+   * then exit nonzero so orchestrators know to restart the process
+   */
+  private async shutdownAndExitAfterFatalError() {
+    if (!this.fatalErrorShutdownBegun) {
+      this.fatalErrorShutdownBegun = true
+
+      try {
+        await this.shutdownWithTimeout()
+      } catch (error) {
+        PsychicApp.logWithLevel(
+          'error',
+          '[psychic-workers] error during graceful shutdown after fatal error:',
+          error,
+        )
+      }
+    }
+
+    process.exit(1)
+  }
+
+  /**
+   * @internal
+   *
+   * runs {@link Background.shutdown}, rejecting if it has not settled
+   * within SHUTDOWN_TIMEOUT_MS
+   */
+  private async shutdownWithTimeout() {
+    await Promise.race([
+      this.shutdown(),
+      new Promise<never>((_, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `[psychic-workers] graceful shutdown timed out after ${Background.SHUTDOWN_TIMEOUT_MS}ms`,
+              ),
+            ),
+          Background.SHUTDOWN_TIMEOUT_MS,
+        ).unref()
+      }),
+    ])
   }
 
   /**
@@ -208,7 +283,12 @@ export class Background {
     if (!EnvInternal.isTest) PsychicApp.log(`[psychic-workers] closeAllRedisConnections`)
 
     for (const worker of this.workers) {
-      await worker.close()
+      try {
+        await worker.close()
+      } catch (error) {
+        if (!EnvInternal.isTest)
+          PsychicApp.logWithLevel('error', `[psychic-workers] error closing worker:`, error)
+      }
     }
 
     for (const connection of this.redisConnections) {
@@ -491,27 +571,25 @@ export class Background {
    */
   public work() {
     process.on('uncaughtException', (error: Error) => {
-      PsychicApp.log('[psychic-workers] uncaughtException:', error)
+      PsychicApp.logWithLevel('error', '[psychic-workers] uncaughtException:', error)
+      void this.shutdownAndExitAfterFatalError()
     })
 
-    process.on('unhandledRejection', (error: Error) => {
-      PsychicApp.log('[psychic-workers] unhandledRejection:', error)
+    process.on('unhandledRejection', (reason: unknown) => {
+      PsychicApp.logWithLevel('error', '[psychic-workers] unhandledRejection:', reason)
+      void this.shutdownAndExitAfterFatalError()
     })
 
     process.on('SIGTERM', () => {
       if (!EnvInternal.isTest) PsychicApp.log('[psychic-workers] handle SIGTERM')
 
       void this.shutdownAndExit()
-        .then(() => {})
-        .catch(() => {})
     })
 
     process.on('SIGINT', () => {
       if (!EnvInternal.isTest) PsychicApp.log('[psychic-workers] handle SIGINT')
 
       void this.shutdownAndExit()
-        .then(() => {})
-        .catch(() => {})
     })
 
     this.connect({ activateWorkers: true })
@@ -836,25 +914,26 @@ export class Background {
           objectClass = PsychicApp.lookupClassByGlobalName(globalName)
         }
 
-        if (!objectClass) return
+        if (!objectClass) throw new NoClassForSpecifiedGlobalName(globalName)
 
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         await objectClass[method!](...args, job)
         break
 
-      case 'BackgroundJobQueueModelInstanceJob':
+      case 'BackgroundJobQueueModelInstanceJob': {
         if (globalName) {
           dreamClass = PsychicApp.lookupClassByGlobalName(globalName) as typeof Dream | undefined
         }
 
-        if (dreamClass) {
-          const modelInstance = await dreamClass.connection('primary').find(id)
-          if (!modelInstance) return
+        if (!dreamClass) throw new NoClassForSpecifiedGlobalName(globalName)
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          await (modelInstance as any)[method!](...args, job)
-        }
+        const modelInstance = await dreamClass.connection('primary').find(id)
+        if (!modelInstance) return
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        await (modelInstance as any)[method!](...args, job)
         break
+      }
     }
   }
 }
