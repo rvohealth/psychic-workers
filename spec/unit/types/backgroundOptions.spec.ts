@@ -9,8 +9,9 @@ import { fakeRedisConnection, nativeWorkerOptions } from '../../helpers/bullmqRe
  * enforced by typing each branch's foreign keys as `never`.
  *
  * The assertions below are compile-time only. Every `@ts-expect-error` fails the
- * build if the line it precedes stops being an error, so `pnpm typecheck` (which
- * type checks this directory, unlike `pnpm build`) is what actually runs them.
+ * build if the line it precedes stops being an error, so `pnpm build:test-app`
+ * (which type checks this directory, unlike `pnpm build`) is what actually runs
+ * them — that is the command CI runs in the check-build job.
  * The one runtime expectation exists so vitest has a test to report on.
  */
 describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
@@ -66,6 +67,20 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       defaultBullMQWorkerOptions: { lockDuration: 1000 },
     }
 
+    // `BullMQNativeWorkerOptions extends WorkerOptions` without
+    // `Omit<..., 'connection'>`, so the literal form an app would write does not
+    // compile: every worker entry is required to carry a connection that Psychic
+    // then overwrites. This pins that as current behavior; when `src/` adds the
+    // `Omit`, the directive below goes unused and the build fails, forcing this
+    // example to be updated. The behavioral specs route around it through the
+    // `nativeWorkerOptions()` helper.
+    const nativeWorkersWithoutConnection: PsychicBackgroundOptions = {
+      nativeBullMQ: {
+        // @ts-expect-error namedQueueWorkers entries are required to carry a connection
+        namedQueueWorkers: { alpha: { workerCount: 1 } },
+      },
+    }
+
     ///////////////////
     // the exclusion //
     ///////////////////
@@ -118,6 +133,7 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       simpleMissingQueueConnection,
       simpleMissingWorkerConnectionKey,
       native,
+      nativeWorkersWithoutConnection,
       nativePlusWorkstreams,
       nativePlusDefaultWorkstream,
       simplePlusNative,
@@ -125,6 +141,6 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       priorityOnlyJobConfig,
       unknownWorkstreamJobConfig,
       mixedJobConfig,
-    ]).toHaveLength(12)
+    ]).toHaveLength(13)
   })
 })

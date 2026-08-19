@@ -26,7 +26,9 @@ export class RecordingQueue {
   /**
    * every queue constructed since the last reset, excluding the throwaway
    * `TestQueue` that `Background#_addToQueue` builds when it short-circuits
-   * job invocation in test mode
+   * job invocation in test mode. The name is owned by
+   * `src/background/index.ts` (`new Background.Queue('TestQueue', ...)`) and is
+   * not exported, so it is duplicated here.
    */
   public static get constructed(): RecordingQueue[] {
     return RecordingQueue.instances.filter(queue => queue.queueName !== 'TestQueue')
@@ -45,6 +47,19 @@ export class RecordingQueue {
   public add(jobType: string, jobData: unknown, opts: Record<string, unknown>) {
     this.adds.push({ jobType, jobData, opts })
     return Promise.resolve(null)
+  }
+
+  /**
+   * BullMQ's `Job` constructor binds `toKey` off the queue it is handed and
+   * builds a `Scripts` instance from the queue's `keys`, so the recorder needs
+   * both to stand in for the throwaway `TestQueue` that `Background#_addToQueue`
+   * constructs when it short-circuits job invocation in test mode. Nothing ever
+   * reaches Redis: the Job is only used to carry job data into `doWork`.
+   */
+  public keys: Record<string, string> = {}
+
+  public toKey(type: string) {
+    return `${this.queueName}:${type}`
   }
 
   public upsertJobScheduler(...args: unknown[]) {

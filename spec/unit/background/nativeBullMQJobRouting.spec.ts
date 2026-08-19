@@ -95,17 +95,35 @@ describe('Background#queueInstance routing in native BullMQ mode', () => {
       expect(queueNamed('alpha').adds.length).toEqual(1)
     })
 
+    it('routes a scheduled job to the named queue identified by `queue`', async () => {
+      await backgroundInstance.scheduledMethod(DummyService, '* * * * *', 'classRunInBG', {
+        globalName: 'services/DummyService',
+        args: ['bottlearum'],
+        jobConfig: { queue: 'beta' },
+      })
+
+      expect(queueNamed('beta').jobSchedulers.length).toEqual(1)
+      expect(queueNamed('beta').jobSchedulers[0]![0]).toEqual('services/DummyService:classRunInBG')
+      expect(queueNamed('alpha').jobSchedulers.length).toEqual(0)
+      expect(queueNamed(Background.defaultQueueName).jobSchedulers.length).toEqual(0)
+    })
+
     context('priority', () => {
       it('writes a top-level priority when there is no group id', async () => {
         await background({ queue: 'alpha', priority: 'urgent' })
 
         expect(queueNamed('alpha').adds[0]!.opts).toEqual({ group: undefined, priority: 1 })
+        // `toEqual` ignores undefined-valued keys on both sides, so the `group:
+        // undefined` above cannot tell "written as undefined" from "never
+        // written". The key really is written, so assert its presence outright.
+        expect(queueNamed('alpha').adds[0]!.opts).toHaveProperty('group')
       })
 
       it('defaults to `default` priority', async () => {
         await background({ queue: 'alpha' })
 
         expect(queueNamed('alpha').adds[0]!.opts).toEqual({ group: undefined, priority: 2 })
+        expect(queueNamed('alpha').adds[0]!.opts).toHaveProperty('group')
       })
 
       it('moves the priority into the group and writes no top-level priority when a group id is present', async () => {
@@ -121,6 +139,7 @@ describe('Background#queueInstance routing in native BullMQ mode', () => {
         await background({ queue: 'alpha', priority: 'last' })
 
         expect(queueNamed('alpha').adds[0]!.opts).toEqual({ group: undefined, priority: 4 })
+        expect(queueNamed('alpha').adds[0]!.opts).toHaveProperty('group')
       })
 
       it('treats a workstream name as the group id', async () => {
@@ -134,6 +153,17 @@ describe('Background#queueInstance routing in native BullMQ mode', () => {
   context('with the default automatic test invocation', () => {
     beforeEach(() => {
       connectNative()
+    })
+
+    it('invokes the job immediately instead of adding it to the routed queue', async () => {
+      await background({ queue: 'alpha' })
+
+      expect(queueNamed('alpha').adds.length).toEqual(0)
+      // `_addToQueue` builds a throwaway queue named `TestQueue` (the literal is
+      // owned by src/background/index.ts) to construct the Job it invokes
+      // directly, and `RecordingQueue.constructed` filters it back out
+      expect(RecordingQueue.instances.map(queue => queue.queueName)).toContain('TestQueue')
+      expect(RecordingQueue.constructed.map(queue => queue.queueName)).not.toContain('TestQueue')
     })
 
     it('raises for an unrecognized queue name before short-circuiting job invocation', async () => {
