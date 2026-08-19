@@ -238,10 +238,13 @@ describe('Background#nativeBullMQConnect named queues', () => {
 
     it('passes the Psychic-only queueConnection/workerConnection keys through to the named Queue', () => {
       const namedQueueConnection = fakeRedisConnection('namedQueue')
+      const namedWorkerConnection = fakeRedisConnection('namedWorker')
 
       connectNative({
         nativeBullMQ: {
-          namedQueueOptions: { alpha: { queueConnection: namedQueueConnection } },
+          namedQueueOptions: {
+            alpha: { queueConnection: namedQueueConnection, workerConnection: namedWorkerConnection },
+          },
         },
         defaultQueueConnection: queueConnection,
         defaultWorkerConnection: workerConnection,
@@ -251,6 +254,7 @@ describe('Background#nativeBullMQConnect named queues', () => {
         queue => queue.queueName === nameToRedisQueueName('alpha', namedQueueConnection),
       )!
       expect(alpha.queueOptions['queueConnection']).toBe(namedQueueConnection)
+      expect(alpha.queueOptions['workerConnection']).toBe(namedWorkerConnection)
       expect(alpha.queueOptions['connection']).toBe(namedQueueConnection)
     })
   })

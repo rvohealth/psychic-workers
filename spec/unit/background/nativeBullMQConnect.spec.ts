@@ -1,6 +1,7 @@
 import { Queue, Worker } from 'bullmq'
-import { Redis } from 'ioredis'
+import { Cluster, Redis } from 'ioredis'
 import nameToRedisQueueName from '../../../src/background/helpers/nameToRedisQueueName.js'
+import parallelTestSafeQueueName from '../../../src/background/helpers/parallelTestSafeQueueName.js'
 import ActivatingBackgroundWorkersWithoutDefaultWorkerConnection from '../../../src/error/background/ActivatingBackgroundWorkersWithoutDefaultWorkerConnection.js'
 import DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../../../src/error/background/DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
 import { Background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
@@ -45,13 +46,25 @@ describe('Background#nativeBullMQConnect', () => {
     it('treats an empty nativeBullMQ object as a request for native mode', () => {
       // every key of `nativeBullMQ` is optional, so `nativeBullMQ: {}` is a legal
       // config, and the truthiness check in `connect` selects the native branch
-      connectNative({ nativeBullMQ: {}, defaultQueueConnection: queueConnection })
+      connectNative(
+        {
+          nativeBullMQ: {},
+          defaultQueueConnection: queueConnection,
+          defaultWorkerConnection: workerConnection,
+        },
+        { activateWorkers: true },
+      )
 
       expect(RecordingQueue.constructed.length).toEqual(1)
       expect(RecordingQueue.constructed[0]!.queueName).toEqual(
         nameToRedisQueueName(Background.defaultQueueName, queueConnection),
       )
-      expect(RecordingWorker.instances.length).toEqual(0)
+
+      // the queue above is identical in both modes, so the discriminator is the
+      // worker: simple mode writes `concurrency: DEFAULT_CONCURRENCY` onto every
+      // worker it builds, while the native branch writes no concurrency key at all
+      expect(RecordingWorker.instances.length).toEqual(1)
+      expect(RecordingWorker.instances[0]!.workerOptions).not.toHaveProperty('concurrency')
     })
   })
 
@@ -66,9 +79,10 @@ describe('Background#nativeBullMQConnect', () => {
       expect(backgroundInstance.queues.length).toEqual(1)
 
       const defaultQueue = RecordingQueue.constructed[0]!
-      expect(defaultQueue.queueName).toEqual(
-        nameToRedisQueueName('TestappBackgroundJobQueue', queueConnection),
-      )
+      // asserted against the literal rather than against `nameToRedisQueueName`,
+      // which is the function producing it. `parallelTestSafeQueueName` only
+      // appends a suffix when the suite runs with DREAM_PARALLEL_TESTS > 1
+      expect(defaultQueue.queueName).toEqual(parallelTestSafeQueueName('TestappBackgroundJobQueue'))
       expect(defaultQueue.queueOptions).toEqual({ connection: queueConnection })
     })
 
@@ -116,6 +130,43 @@ describe('Background#nativeBullMQConnect', () => {
       const defaultQueue = RecordingQueue.constructed[0]!
       expect(defaultQueue.queueOptions['queueConnection']).toBe(queueConnection)
       expect(defaultQueue.queueOptions['workerConnection']).toBe(workerConnection)
+    })
+  })
+
+  context('redis queue naming', () => {
+    it('strips braces out of the configured queue name', () => {
+      connectNative({
+        nativeBullMQ: { namedQueueOptions: { '{alpha}': {} } },
+        defaultQueueConnection: queueConnection,
+      })
+
+      expect(RecordingQueue.constructed.map(queue => queue.queueName)).toEqual([
+        parallelTestSafeQueueName('TestappBackgroundJobQueue'),
+        parallelTestSafeQueueName('alpha'),
+      ])
+    })
+
+    it('wraps the queue name in a redis hash tag when the connection is a Cluster', () => {
+      // this is the reason `QueueOptionsWithConnectionInstance` takes connection
+      // instances rather than connection configs. The cluster is never connected:
+      // `nameToRedisQueueName` only asks whether the connection is `instanceof Cluster`
+      const clusterConnection = new Cluster([{ host: '127.0.0.1', port: 6379 }], { lazyConnect: true })
+
+      try {
+        connectNative({
+          nativeBullMQ: { namedQueueOptions: { '{alpha}': {} } },
+          defaultQueueConnection: clusterConnection,
+        })
+
+        // the hash tag keeps every key of a queue on a single cluster slot, and
+        // the cluster branch skips the parallel-test suffix entirely
+        expect(RecordingQueue.constructed.map(queue => queue.queueName)).toEqual([
+          '{TestappBackgroundJobQueue}',
+          '{alpha}',
+        ])
+      } finally {
+        clusterConnection.disconnect()
+      }
     })
   })
 
@@ -250,6 +301,41 @@ describe('Background#nativeBullMQConnect', () => {
       )
       await backgroundInstance.closeAllRedisConnections()
       quitSpies.forEach(quitSpy => expect(quitSpy).toHaveBeenCalled())
+    })
+
+    it('never accumulates the app-level connections that defaultQueueOptions shadows', async () => {
+      const preferredQueueConnection = fakeRedisConnection('preferredQueue')
+      const preferredWorkerConnection = fakeRedisConnection('preferredWorker')
+
+      const backgroundInstance = connectNative(
+        {
+          nativeBullMQ: {
+            defaultQueueOptions: {
+              queueConnection: preferredQueueConnection,
+              workerConnection: preferredWorkerConnection,
+            },
+          },
+          defaultQueueConnection: queueConnection,
+          defaultWorkerConnection: workerConnection,
+        },
+        { activateWorkers: true },
+      )
+
+      // only the *resolved* connections are accumulated, so the shadowed
+      // app-level connections are dropped on the floor
+      const redisConnections = (backgroundInstance as unknown as { redisConnections: { __label: string }[] })
+        .redisConnections
+      expect(redisConnections.map(connection => connection.__label)).toEqual([
+        'preferredQueue',
+        'preferredWorker',
+      ])
+
+      // ...and are therefore never quit on shutdown
+      const shadowedQuitSpies = [queueConnection, workerConnection].map(connection =>
+        vi.spyOn(connection, 'quit').mockResolvedValue('OK'),
+      )
+      await backgroundInstance.closeAllRedisConnections()
+      shadowedQuitSpies.forEach(quitSpy => expect(quitSpy).not.toHaveBeenCalled())
     })
   })
 

@@ -72,6 +72,20 @@ describe('worker concurrency across the two background configuration modes', () 
       expect(workersFor('snazzy')[0]!.workerOptions['concurrency']).toEqual(5)
     })
 
+    it('coerces a configured concurrency of 0 back up to 10', () => {
+      connectWorkers({
+        defaultQueueConnection: queueConnection,
+        defaultWorkerConnection: workerConnection,
+        defaultWorkstream: { concurrency: 0 },
+        namedWorkstreams: [{ workerCount: 1, name: 'snazzy', concurrency: 0 }],
+      })
+
+      // the fallback is written with `||` rather than `??`, so 0 is not an
+      // expressible concurrency in simple mode
+      expect(workersFor(Background.defaultQueueName)[0]!.workerOptions['concurrency']).toEqual(10)
+      expect(workersFor('snazzy')[0]!.workerOptions['concurrency']).toEqual(10)
+    })
+
     it('ignores concurrency, connection, and group supplied via defaultBullMQWorkerOptions', () => {
       const ignoredConnection = fakeRedisConnection('ignored')
 
@@ -132,6 +146,21 @@ describe('worker concurrency across the two background configuration modes', () 
 
       expect(workersFor(Background.defaultQueueName)[0]!.workerOptions['concurrency']).toEqual(25)
       expect(workersFor('snazzy')[0]!.workerOptions['concurrency']).toEqual(5)
+    })
+
+    it('lets a configured concurrency of 0 survive, unlike simple mode', () => {
+      connectWorkers({
+        defaultQueueConnection: queueConnection,
+        defaultWorkerConnection: workerConnection,
+        nativeBullMQ: {
+          defaultWorkerOptions: nativeWorkerOptions({ concurrency: 0 }),
+          namedQueueOptions: { snazzy: {} },
+          namedQueueWorkers: { snazzy: nativeWorkerOptions({ concurrency: 0 }) },
+        },
+      })
+
+      expect(workersFor(Background.defaultQueueName)[0]!.workerOptions['concurrency']).toEqual(0)
+      expect(workersFor('snazzy')[0]!.workerOptions['concurrency']).toEqual(0)
     })
 
     it('falls back to defaultBullMQWorkerOptions concurrency when the native options omit it', () => {
