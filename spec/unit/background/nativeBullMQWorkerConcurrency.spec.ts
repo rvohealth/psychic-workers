@@ -1,13 +1,11 @@
-import { Queue, Worker } from 'bullmq'
 import { Redis } from 'ioredis'
 import nameToRedisQueueName from '../../../src/background/helpers/nameToRedisQueueName.js'
 import { Background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
 import { PsychicBackgroundOptions } from '../../../src/types/background.js'
 import {
   fakeRedisConnection,
+  installBullMQRecorders,
   nativeWorkerOptions,
-  RecordingQueue,
-  RecordingWorker,
 } from '../../helpers/bullmqRecorders.js'
 
 /**
@@ -17,6 +15,8 @@ import {
  * silently drops to BullMQ's own default of 1.
  */
 describe('worker concurrency across the two background configuration modes', () => {
+  const bullmq = installBullMQRecorders()
+
   let queueConnection: Redis
   let workerConnection: Redis
 
@@ -28,18 +28,12 @@ describe('worker concurrency across the two background configuration modes', () 
   }
 
   function workersFor(queueName: string) {
-    return RecordingWorker.instances.filter(
+    return bullmq.workers.filter(
       worker => worker.queueName === nameToRedisQueueName(queueName, queueConnection),
     )
   }
 
   beforeEach(() => {
-    RecordingQueue.reset()
-    RecordingWorker.reset()
-
-    vi.spyOn(Background, 'Queue', 'get').mockReturnValue(RecordingQueue as unknown as typeof Queue)
-    vi.spyOn(Background, 'Worker', 'get').mockReturnValue(RecordingWorker as unknown as typeof Worker)
-
     queueConnection = fakeRedisConnection('queue')
     workerConnection = fakeRedisConnection('worker')
   })

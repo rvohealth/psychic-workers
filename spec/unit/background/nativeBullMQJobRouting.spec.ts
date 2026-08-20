@@ -1,4 +1,3 @@
-import { Queue, Worker } from 'bullmq'
 import { Redis } from 'ioredis'
 import nameToRedisQueueName from '../../../src/background/helpers/nameToRedisQueueName.js'
 import NoQueueForSpecifiedQueueName from '../../../src/error/background/NoQueueForSpecifiedQueueName.js'
@@ -8,12 +7,13 @@ import { BackgroundJobConfig, PsychicBackgroundOptions } from '../../../src/type
 import DummyService from '../../../test-app/src/app/services/DummyService.js'
 import {
   fakeRedisConnection,
+  installBullMQRecorders,
   nativeWorkerOptions,
-  RecordingQueue,
-  RecordingWorker,
 } from '../../helpers/bullmqRecorders.js'
 
 describe('Background#queueInstance routing in native BullMQ mode', () => {
+  const bullmq = installBullMQRecorders()
+
   let queueConnection: Redis
   let workerConnection: Redis
   let backgroundInstance: Background
@@ -35,9 +35,7 @@ describe('Background#queueInstance routing in native BullMQ mode', () => {
   }
 
   function queueNamed(queueName: string) {
-    return RecordingQueue.constructed.find(
-      queue => queue.queueName === nameToRedisQueueName(queueName, queueConnection),
-    )!
+    return bullmq.queues.find(queue => queue.queueName === nameToRedisQueueName(queueName, queueConnection))!
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,12 +48,6 @@ describe('Background#queueInstance routing in native BullMQ mode', () => {
   }
 
   beforeEach(() => {
-    RecordingQueue.reset()
-    RecordingWorker.reset()
-
-    vi.spyOn(Background, 'Queue', 'get').mockReturnValue(RecordingQueue as unknown as typeof Queue)
-    vi.spyOn(Background, 'Worker', 'get').mockReturnValue(RecordingWorker as unknown as typeof Worker)
-
     queueConnection = fakeRedisConnection('queue')
     workerConnection = fakeRedisConnection('worker')
   })
@@ -161,9 +153,9 @@ describe('Background#queueInstance routing in native BullMQ mode', () => {
       expect(queueNamed('alpha').adds.length).toEqual(0)
       // `_addToQueue` builds a throwaway queue named `TestQueue` (the literal is
       // owned by src/background/index.ts) to construct the Job it invokes
-      // directly, and `RecordingQueue.constructed` filters it back out
-      expect(RecordingQueue.instances.map(queue => queue.queueName)).toContain('TestQueue')
-      expect(RecordingQueue.constructed.map(queue => queue.queueName)).not.toContain('TestQueue')
+      // directly, and `bullmq.queues` filters it back out
+      expect(bullmq.allQueues.map(queue => queue.queueName)).toContain('TestQueue')
+      expect(bullmq.queues.map(queue => queue.queueName)).not.toContain('TestQueue')
     })
 
     it('raises for an unrecognized queue name before short-circuiting job invocation', async () => {

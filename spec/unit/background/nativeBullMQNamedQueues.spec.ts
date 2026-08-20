@@ -1,16 +1,16 @@
-import { Queue, Worker } from 'bullmq'
 import { Redis } from 'ioredis'
 import nameToRedisQueueName from '../../../src/background/helpers/nameToRedisQueueName.js'
 import { Background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
 import { PsychicBackgroundOptions } from '../../../src/types/background.js'
 import {
   fakeRedisConnection,
+  installBullMQRecorders,
   nativeWorkerOptions,
-  RecordingQueue,
-  RecordingWorker,
 } from '../../helpers/bullmqRecorders.js'
 
 describe('Background#nativeBullMQConnect named queues', () => {
+  const bullmq = installBullMQRecorders()
+
   let queueConnection: Redis
   let workerConnection: Redis
 
@@ -25,24 +25,16 @@ describe('Background#nativeBullMQConnect named queues', () => {
   }
 
   function namedQueue(queueName: string) {
-    return RecordingQueue.constructed.find(
-      queue => queue.queueName === nameToRedisQueueName(queueName, queueConnection),
-    )
+    return bullmq.queues.find(queue => queue.queueName === nameToRedisQueueName(queueName, queueConnection))
   }
 
   function workersFor(queueName: string) {
-    return RecordingWorker.instances.filter(
+    return bullmq.workers.filter(
       worker => worker.queueName === nameToRedisQueueName(queueName, queueConnection),
     )
   }
 
   beforeEach(() => {
-    RecordingQueue.reset()
-    RecordingWorker.reset()
-
-    vi.spyOn(Background, 'Queue', 'get').mockReturnValue(RecordingQueue as unknown as typeof Queue)
-    vi.spyOn(Background, 'Worker', 'get').mockReturnValue(RecordingWorker as unknown as typeof Worker)
-
     queueConnection = fakeRedisConnection('queue')
     workerConnection = fakeRedisConnection('worker')
   })
@@ -116,7 +108,7 @@ describe('Background#nativeBullMQConnect named queues', () => {
       // one default queue plus `alpha`; no queue for `ghost`
       expect(backgroundInstance.queues.length).toEqual(2)
       expect(namedQueue('ghost')).toBeUndefined()
-      expect(RecordingWorker.instances.length).toEqual(2)
+      expect(bullmq.workers.length).toEqual(2)
       expect(workersFor('alpha').length).toEqual(1)
       expect(workersFor('ghost').length).toEqual(0)
       expect(
@@ -192,9 +184,7 @@ describe('Background#nativeBullMQConnect named queues', () => {
 
       // ...while the default queue, which supplied no defaultJobOptions of its
       // own, still carries all four
-      expect(RecordingQueue.constructed[0]!.queueOptions['defaultJobOptions']).toEqual(
-        appWideDefaultJobOptions,
-      )
+      expect(bullmq.queues[0]!.queueOptions['defaultJobOptions']).toEqual(appWideDefaultJobOptions)
     })
   })
 
@@ -250,7 +240,7 @@ describe('Background#nativeBullMQConnect named queues', () => {
         defaultWorkerConnection: workerConnection,
       })
 
-      const alpha = RecordingQueue.constructed.find(
+      const alpha = bullmq.queues.find(
         queue => queue.queueName === nameToRedisQueueName('alpha', namedQueueConnection),
       )!
       expect(alpha.queueOptions['queueConnection']).toBe(namedQueueConnection)

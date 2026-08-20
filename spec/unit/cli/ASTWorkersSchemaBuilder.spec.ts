@@ -1,5 +1,4 @@
 import { CliFileWriter, DreamCLI } from '@rvoh/dream/system'
-import { Queue, Worker } from 'bullmq'
 import { Redis } from 'ioredis'
 import ASTWorkersSchemaBuilder from '../../../src/cli/ASTWorkersSchemaBuilder.js'
 import DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../../../src/error/background/DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
@@ -7,9 +6,8 @@ import { Background, background, PsychicAppWorkers } from '../../../src/package-
 import { PsychicBackgroundOptions } from '../../../src/types/background.js'
 import {
   fakeRedisConnection,
+  installBullMQRecorders,
   nativeWorkerOptions,
-  RecordingQueue,
-  RecordingWorker,
 } from '../../helpers/bullmqRecorders.js'
 
 /**
@@ -22,6 +20,8 @@ import {
  * before and after each example.
  */
 describe('ASTWorkersSchemaBuilder#build', () => {
+  installBullMQRecorders()
+
   let queueConnection: Redis
   let workerConnection: Redis
   let writtenFiles: { filepath: string; contents: string }[]
@@ -56,12 +56,8 @@ describe('ASTWorkersSchemaBuilder#build', () => {
   }
 
   beforeEach(() => {
-    RecordingQueue.reset()
-    RecordingWorker.reset()
     resetBackgroundSingleton()
 
-    vi.spyOn(Background, 'Queue', 'get').mockReturnValue(RecordingQueue as unknown as typeof Queue)
-    vi.spyOn(Background, 'Worker', 'get').mockReturnValue(RecordingWorker as unknown as typeof Worker)
     vi.spyOn(DreamCLI.logger, 'logProgress').mockImplementation(
       async (_text: string, cb: () => void | Promise<void>) => {
         await cb()

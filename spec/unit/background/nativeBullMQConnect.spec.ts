@@ -1,4 +1,3 @@
-import { Queue, Worker } from 'bullmq'
 import { Cluster, Redis } from 'ioredis'
 import nameToRedisQueueName from '../../../src/background/helpers/nameToRedisQueueName.js'
 import parallelTestSafeQueueName from '../../../src/background/helpers/parallelTestSafeQueueName.js'
@@ -8,12 +7,13 @@ import { Background, PsychicAppWorkers } from '../../../src/package-exports/inde
 import { PsychicBackgroundOptions } from '../../../src/types/background.js'
 import {
   fakeRedisConnection,
+  installBullMQRecorders,
   nativeWorkerOptions,
-  RecordingQueue,
-  RecordingWorker,
 } from '../../helpers/bullmqRecorders.js'
 
 describe('Background#nativeBullMQConnect', () => {
+  const bullmq = installBullMQRecorders()
+
   let queueConnection: Redis
   let workerConnection: Redis
 
@@ -28,12 +28,6 @@ describe('Background#nativeBullMQConnect', () => {
   }
 
   beforeEach(() => {
-    RecordingQueue.reset()
-    RecordingWorker.reset()
-
-    vi.spyOn(Background, 'Queue', 'get').mockReturnValue(RecordingQueue as unknown as typeof Queue)
-    vi.spyOn(Background, 'Worker', 'get').mockReturnValue(RecordingWorker as unknown as typeof Worker)
-
     queueConnection = fakeRedisConnection('queue')
     workerConnection = fakeRedisConnection('worker')
   })
@@ -55,16 +49,16 @@ describe('Background#nativeBullMQConnect', () => {
         { activateWorkers: true },
       )
 
-      expect(RecordingQueue.constructed.length).toEqual(1)
-      expect(RecordingQueue.constructed[0]!.queueName).toEqual(
+      expect(bullmq.queues.length).toEqual(1)
+      expect(bullmq.queues[0]!.queueName).toEqual(
         nameToRedisQueueName(Background.defaultQueueName, queueConnection),
       )
 
       // the queue above is identical in both modes, so the discriminator is the
       // worker: simple mode writes `concurrency: DEFAULT_CONCURRENCY` onto every
       // worker it builds, while the native branch writes no concurrency key at all
-      expect(RecordingWorker.instances.length).toEqual(1)
-      expect(RecordingWorker.instances[0]!.workerOptions).not.toHaveProperty('concurrency')
+      expect(bullmq.workers.length).toEqual(1)
+      expect(bullmq.workers[0]!.workerOptions).not.toHaveProperty('concurrency')
     })
   })
 
@@ -78,7 +72,7 @@ describe('Background#nativeBullMQConnect', () => {
       expect(Background.defaultQueueName).toEqual('TestappBackgroundJobQueue')
       expect(backgroundInstance.queues.length).toEqual(1)
 
-      const defaultQueue = RecordingQueue.constructed[0]!
+      const defaultQueue = bullmq.queues[0]!
       // asserted against the literal rather than against `nameToRedisQueueName`,
       // which is the function producing it. `parallelTestSafeQueueName` only
       // appends a suffix when the suite runs with DREAM_PARALLEL_TESTS > 1
@@ -98,7 +92,7 @@ describe('Background#nativeBullMQConnect', () => {
         defaultQueueConnection: queueConnection,
       })
 
-      const defaultQueue = RecordingQueue.constructed[0]!
+      const defaultQueue = bullmq.queues[0]!
       expect(defaultQueue.queueOptions['prefix']).toEqual('fromNativeDefaultQueueOptions')
       // a key only present in defaultBullMQQueueOptions survives
       expect(defaultQueue.queueOptions['defaultJobOptions']).toEqual({ attempts: 20 })
@@ -115,7 +109,7 @@ describe('Background#nativeBullMQConnect', () => {
         defaultQueueConnection: queueConnection,
       })
 
-      expect(RecordingQueue.constructed[0]!.queueOptions['connection']).toBe(queueConnection)
+      expect(bullmq.queues[0]!.queueOptions['connection']).toBe(queueConnection)
     })
 
     it('passes the queueConnection/workerConnection keys of defaultQueueOptions through to BullMQ', () => {
@@ -127,7 +121,7 @@ describe('Background#nativeBullMQConnect', () => {
         },
       })
 
-      const defaultQueue = RecordingQueue.constructed[0]!
+      const defaultQueue = bullmq.queues[0]!
       expect(defaultQueue.queueOptions['queueConnection']).toBe(queueConnection)
       expect(defaultQueue.queueOptions['workerConnection']).toBe(workerConnection)
     })
@@ -140,7 +134,7 @@ describe('Background#nativeBullMQConnect', () => {
         defaultQueueConnection: queueConnection,
       })
 
-      expect(RecordingQueue.constructed.map(queue => queue.queueName)).toEqual([
+      expect(bullmq.queues.map(queue => queue.queueName)).toEqual([
         parallelTestSafeQueueName('TestappBackgroundJobQueue'),
         parallelTestSafeQueueName('alpha'),
       ])
@@ -160,7 +154,7 @@ describe('Background#nativeBullMQConnect', () => {
 
         // the hash tag keeps every key of a queue on a single cluster slot, and
         // the cluster branch skips the parallel-test suffix entirely
-        expect(RecordingQueue.constructed.map(queue => queue.queueName)).toEqual([
+        expect(bullmq.queues.map(queue => queue.queueName)).toEqual([
           '{TestappBackgroundJobQueue}',
           '{alpha}',
         ])
@@ -178,7 +172,7 @@ describe('Background#nativeBullMQConnect', () => {
         defaultWorkerConnection: workerConnection,
       })
 
-      expect(RecordingWorker.instances.length).toEqual(0)
+      expect(bullmq.workers.length).toEqual(0)
     })
 
     it('builds a single worker on the default queue when defaultWorkerCount is omitted', () => {
@@ -191,9 +185,9 @@ describe('Background#nativeBullMQConnect', () => {
         { activateWorkers: true },
       )
 
-      expect(RecordingWorker.instances.length).toEqual(1)
+      expect(bullmq.workers.length).toEqual(1)
 
-      const worker = RecordingWorker.instances[0]!
+      const worker = bullmq.workers[0]!
       expect(worker.queueName).toEqual(nameToRedisQueueName(Background.defaultQueueName, queueConnection))
       expect(worker.workerOptions).toEqual({ autorun: false, connection: workerConnection })
     })
@@ -208,7 +202,7 @@ describe('Background#nativeBullMQConnect', () => {
         { activateWorkers: true },
       )
 
-      expect(RecordingWorker.instances.length).toEqual(3)
+      expect(bullmq.workers.length).toEqual(3)
     })
 
     it('lets nativeBullMQ.defaultWorkerOptions override defaultBullMQWorkerOptions', () => {
@@ -222,7 +216,7 @@ describe('Background#nativeBullMQConnect', () => {
         { activateWorkers: true },
       )
 
-      const worker = RecordingWorker.instances[0]!
+      const worker = bullmq.workers[0]!
       expect(worker.workerOptions['lockDuration']).toEqual(2222)
       expect(worker.workerOptions['maxStalledCount']).toEqual(7)
       expect(worker.workerOptions['connection']).toBe(workerConnection)
@@ -238,7 +232,7 @@ describe('Background#nativeBullMQConnect', () => {
         defaultQueueConnection: queueConnection,
       })
 
-      expect(RecordingQueue.constructed[0]!.queueOptions['connection']).toBe(preferredConnection)
+      expect(bullmq.queues[0]!.queueOptions['connection']).toBe(preferredConnection)
     })
 
     it('reads the default worker connection off defaultQueueOptions, not off a worker options object', () => {
@@ -256,7 +250,7 @@ describe('Background#nativeBullMQConnect', () => {
         { activateWorkers: true },
       )
 
-      expect(RecordingWorker.instances[0]!.workerOptions['connection']).toBe(preferredConnection)
+      expect(bullmq.workers[0]!.workerOptions['connection']).toBe(preferredConnection)
     })
 
     it('falls back to the app-level defaultQueueConnection/defaultWorkerConnection', () => {
@@ -269,8 +263,8 @@ describe('Background#nativeBullMQConnect', () => {
         { activateWorkers: true },
       )
 
-      expect(RecordingQueue.constructed[0]!.queueOptions['connection']).toBe(queueConnection)
-      expect(RecordingWorker.instances[0]!.workerOptions['connection']).toBe(workerConnection)
+      expect(bullmq.queues[0]!.queueOptions['connection']).toBe(queueConnection)
+      expect(bullmq.workers[0]!.workerOptions['connection']).toBe(workerConnection)
     })
 
     it('accumulates every connection it encounters so they can all be quit on shutdown', async () => {
@@ -394,8 +388,8 @@ describe('Background#nativeBullMQConnect', () => {
         )
 
         expect(backgroundInstance.queues.length).toEqual(2)
-        expect(RecordingQueue.constructed[1]!.queueOptions['connection']).toBe(queueConnection)
-        expect(RecordingWorker.instances[1]!.workerOptions['connection']).toBe(workerConnection)
+        expect(bullmq.queues[1]!.queueOptions['connection']).toBe(queueConnection)
+        expect(bullmq.workers[1]!.workerOptions['connection']).toBe(workerConnection)
       })
     })
   })
