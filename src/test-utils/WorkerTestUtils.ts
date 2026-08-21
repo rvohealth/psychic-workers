@@ -1,4 +1,4 @@
-import { Job, Queue } from 'bullmq'
+import { Job, Queue, WorkerOptions } from 'bullmq'
 import parallelTestSafeQueueName from '../background/helpers/parallelTestSafeQueueName.js'
 import background, { Background } from '../background/index.js'
 import { BackgroundJobData } from '../types/background.js'
@@ -112,19 +112,11 @@ export default class WorkerTestUtils {
   }
 
   private static async workOne(queue: Queue): Promise<boolean> {
-    // `queue.client` was removed in BullMQ 6; the raw Redis client is now reached
-    // through the queue's backend. Its connection was opened for the (non-blocking)
-    // Queue, so it doesn't have `maxRetriesPerRequest: null` set, which BullMQ 6
-    // now strictly requires for connections handed to a blocking Worker. Duplicate
-    // it with that override rather than reusing it directly.
-    const queueClient = await queue.getBackend().client
-    const connection = queueClient.duplicate({ maxRetriesPerRequest: null })
-
     const worker = new Background.Worker(queue.name, async job => await background.doWork(job), {
       autorun: false,
-      connection,
+      connection: queue.client,
       concurrency: 1,
-    })
+    } as WorkerOptions)
 
     if (!worker) throw new Error(`Failed to find worker for queue: ${queue.name}`)
 
