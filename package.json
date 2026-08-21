@@ -2,7 +2,7 @@
   "type": "module",
   "name": "@rvoh/psychic-workers",
   "description": "Background job system for Psychic applications",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "author": "RVO Health",
   "publishConfig": {
     "access": "public"
@@ -48,7 +48,7 @@
     "build:test-app": "rm -rf dist && echo \"building test app to esm...\" && tsc -p ./tsconfig.esm.build.test-app.json && echo \"building test app to cjs...\" && tsc -p ./tsconfig.cjs.build.test-app.json",
     "uspec": "vitest --config ./spec/unit/vite.config.ts",
     "format": "pnpm prettier . --write",
-    "lint": "pnpm eslint --no-warn-ignored \"src/**/*.ts\" && pnpm prettier . --check",
+    "lint": "pnpm eslint --no-warn-ignored \"src/**/*.ts\" \"spec/**/*.ts\" \"test-app/**/*.ts\" && pnpm prettier . --check",
     "console": "tsx ./src/conf/repl.ts",
     "console:js": "node ./dist/src/conf/repl.js",
     "prepack": "pnpm build",

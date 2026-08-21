@@ -75,9 +75,9 @@ export default class WorkerTestUtils {
 
   /*
    * iterates through each registered queue, and cleans out all
-   * jobs, including completed, failed, and scheduled jobs. This
-   * is especially useful before a test where you plan to exercise
-   * background jobs manually.
+   * jobs, including waiting, paused, prioritized, delayed, completed,
+   * failed, and scheduled jobs. This is especially useful before a test
+   * where you plan to exercise background jobs manually.
    *
    * If your entire app is continuously exercising background jobs
    * manually, you may want to do this in your spec/setup/hooks.ts file,
@@ -93,8 +93,11 @@ export default class WorkerTestUtils {
     background.connect()
 
     for (const queue of background.queues) {
-      // clears all non-scheduled, non-completed, and non-failed jobs
-      await queue.drain()
+      // clears waiting, paused, and prioritized jobs, as well as delayed jobs
+      // (i.e. jobs which have failed and are awaiting a retry). Delayed jobs which
+      // belong to a job scheduler are intentionally left alone by BullMQ here, and
+      // are cleaned up below when their scheduler is removed.
+      await queue.drain(true)
 
       // clear out completed and failed jobs
       await queue.clean(0, 10000, 'completed')

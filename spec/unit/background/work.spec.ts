@@ -1,33 +1,20 @@
 import { PsychicApp } from '@rvoh/psychic'
-import { Queue, Worker } from 'bullmq'
+import type { MockInstance } from 'vitest'
 import { Background } from '../../../src/package-exports/index.js'
+import { installBullMQRecorders } from '../../helpers/bullmqRecorders.js'
 
 describe('Background#work process event handling', () => {
-  class QueueStub {
-    close() {
-      return null
-    }
-  }
-
-  class WorkerStub {
-    close() {
-      return null
-    }
-  }
+  installBullMQRecorders()
 
   let backgroundInstance: Background
-  let exitSpy: ReturnType<typeof vi.spyOn>
+  let exitSpy: MockInstance<typeof process.exit>
   let handlers: Record<string, (...args: unknown[]) => void>
 
   beforeEach(() => {
-    vi.spyOn(Background, 'Queue', 'get').mockReturnValue(QueueStub as unknown as typeof Queue)
-    vi.spyOn(Background, 'Worker', 'get').mockReturnValue(WorkerStub as unknown as typeof Worker)
     vi.spyOn(PsychicApp, 'log').mockReturnValue(undefined)
     vi.spyOn(PsychicApp, 'logWithLevel').mockReturnValue(undefined)
 
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never) as ReturnType<
-      typeof vi.spyOn
-    >
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
 
     handlers = {}
     vi.spyOn(process, 'on').mockImplementation(((event: string, handler: (...args: unknown[]) => void) => {
