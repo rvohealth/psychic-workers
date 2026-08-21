@@ -86,7 +86,7 @@
     "koa-bodyparser": "^4.4.1",
     "koa-conditional-get": "^3.0.0",
     "kysely": "^0.28.13",
-    "kysely-codegen": "^0.19.0",
+    "kysely-codegen": "~0.20.0",
     "luxon-jest-matchers": "^0.1.14",
     "openapi-typescript": "^7.9.1",
     "pg": "^8.13.1",
