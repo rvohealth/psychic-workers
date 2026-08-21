@@ -34,7 +34,7 @@ export default class WorkerTestUtils {
     background.connect()
     const queues = background.queues
 
-    let workWasDone: boolean = true
+    let workWasDone: boolean
 
     do {
       workWasDone = false
