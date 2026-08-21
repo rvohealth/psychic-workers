@@ -8,3 +8,5 @@ allowBuilds:
   esbuild: false
   msgpackr-extract: false
   puppeteer: false
+overrides:
+  '@puppeteer/browsers': ^3.2.1
