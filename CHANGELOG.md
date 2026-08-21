@@ -1,3 +1,7 @@
+## 3.0.0
+
+- **Breaking: the `bullmq` peer dependency now requires `^6.0.0`, up from `^5.64.0`.** BullMQ 5's latest releases still depend on the deprecated `cron-parser@4.x`; BullMQ 6 depends on the current, non-deprecated `cron-parser@5.x`. Upgrade your app's own `bullmq` dependency to `^6.0.0` before upgrading to this release — pnpm/yarn will refuse to install a mismatched peer, and npm will warn. `WorkerTestUtils.workScheduled()`'s internal worker construction was updated for two BullMQ 6 API changes: `Queue#client` was removed (the raw Redis client is now reached through the queue's backend), and BullMQ 6 requires `maxRetriesPerRequest: null` on any connection handed to a blocking `Worker`, which the duplicated connection now sets explicitly. No other public API changed.
+
 ## 2.4.1
 
 - fix: `WorkerTestUtils.clean()` now also clears delayed jobs, as its documentation always stated. `queue.drain()` defaults to leaving the delayed set alone, and BullMQ parks a failed job there while it awaits its retry, so a job failing for a non-transient reason (a `globalName` that no longer resolves, say) was unreachable by `clean()` and survived into later test files — with the default `attempts`/backoff, for days. `WorkerTestUtils.workScheduled()` reads `getDelayed()` indiscriminately, so such a job would then fail whichever spec called `workScheduled` next, in a file unrelated to whatever enqueued it. If your suite has a spec that enqueued a delayed job and relied on it surviving a later `clean()`, it will now find that job gone.
