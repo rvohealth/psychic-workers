@@ -94,7 +94,7 @@ export default class PsychicAppWorkers {
   ) {
     switch (hookEventType) {
       case 'workers:shutdown':
-        this._hooks.workerShutdown.push(cb as () => void | Promise<void>)
+        this._hooks.workerShutdown.push(cb)
         break
 
       default:

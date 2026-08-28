@@ -1,4 +1,3 @@
-import { Worker } from 'bullmq'
 import { Background } from '../../../src/package-exports/index.js'
 
 describe('Background#closeAllRedisConnections', () => {
@@ -8,10 +7,7 @@ describe('Background#closeAllRedisConnections', () => {
 
       const failingWorker = { close: vi.fn().mockRejectedValue(new Error('redis down')) }
       const healthyWorker = { close: vi.fn().mockResolvedValue(undefined) }
-      ;(backgroundInstance as unknown as { _workers: unknown[] })._workers = [
-        failingWorker as unknown as Worker,
-        healthyWorker as unknown as Worker,
-      ]
+      ;(backgroundInstance as unknown as { _workers: unknown[] })._workers = [failingWorker, healthyWorker]
 
       await backgroundInstance.closeAllRedisConnections()
 
