@@ -1,3 +1,8 @@
+## 2.5.0
+
+- add `backgroundWith` to `BaseBackgroundedService` (static) and `BaseBackgroundedModel` (static and instance). It takes `{ delay?: DelayedJobOpts; priority?: BackgroundQueuePriority }` as its first argument, followed by the method name and args. When `priority` is provided, it overrides the priority from `backgroundJobConfig` for that call only; `workstream`, `queue`, and `groupId` are preserved and the config object is not mutated. `delay` accepts the same options as `backgroundWithDelay`, including an optional `jobId` which debounces repeated calls within the delay window, e.g. `MyService.backgroundWith({ delay: { seconds: 30, jobId: 'my-unique-job-id' }, priority: 'urgent' }, 'myMethod', 'abc')`.
+- deprecate `backgroundWithDelay` in favor of `backgroundWith({ delay }, ...)`. It continues to work unchanged and will be removed in a future major version.
+
 ## 2.4.1
 
 - fix: `WorkerTestUtils.clean()` now also clears delayed jobs, as its documentation always stated. `queue.drain()` defaults to leaving the delayed set alone, and BullMQ parks a failed job there while it awaits its retry, so a job failing for a non-transient reason (a `globalName` that no longer resolves, say) was unreachable by `clean()` and survived into later test files — with the default `attempts`/backoff, for days. `WorkerTestUtils.workScheduled()` reads `getDelayed()` indiscriminately, so such a job would then fail whichever spec called `workScheduled` next, in a file unrelated to whatever enqueued it. If your suite has a spec that enqueued a delayed job and relied on it surviving a later `clean()`, it will now find that job gone.

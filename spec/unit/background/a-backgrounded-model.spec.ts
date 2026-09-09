@@ -223,4 +223,181 @@ describe('a backgrounded model', () => {
       })
     })
   })
+
+  describe('.backgroundWith', () => {
+    it('calls the static method, passing args', async () => {
+      const spy = vi.spyOn(User, 'classRunInBG').mockImplementation(async () => {})
+      await User.backgroundWith(
+        { delay: { seconds: 25, jobId: 'myjob' }, priority: 'last' },
+        'classRunInBG',
+        'bottlearum',
+      )
+      expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
+    })
+
+    context('priority and named workstream', () => {
+      let originalTestInvocation: PsychicWorkersAppTestInvocationType
+
+      beforeEach(async () => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        originalTestInvocation = workersApp.testInvocation
+        workersApp.set('testInvocation', 'manual')
+
+        await WorkerTestUtils.clean()
+      })
+
+      afterEach(() => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        workersApp.set('testInvocation', originalTestInvocation)
+      })
+
+      context('with no options', () => {
+        it('uses the priority from backgroundJobConfig and does not delay', async () => {
+          const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
+          await User.backgroundWith({}, 'classRunInBG', 'bottlearum')
+
+          expect(spy).toHaveBeenCalledWith(
+            'BackgroundJobQueueStaticJob',
+            {
+              globalName: User.globalName,
+              args: ['bottlearum'],
+              importKey: undefined,
+              method: 'classRunInBG',
+            },
+            { group: { id: 'snazzy', priority: 1 } },
+          )
+        })
+      })
+
+      context('with a delay and a priority', () => {
+        it('delays the job and overrides the priority within the group object', async () => {
+          const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
+          await User.backgroundWith(
+            { delay: { seconds: 15, jobId: 'myjob' }, priority: 'last' },
+            'classRunInBG',
+            'bottlearum',
+          )
+
+          expect(spy).toHaveBeenCalledWith(
+            'BackgroundJobQueueStaticJob',
+            {
+              globalName: User.globalName,
+              args: ['bottlearum'],
+              importKey: undefined,
+              method: 'classRunInBG',
+            },
+            {
+              deduplication: {
+                extend: true,
+                id: 'myjob',
+                replace: true,
+                ttl: 15000,
+              },
+              delay: 15000,
+              group: { id: 'snazzy', priority: 4 },
+            },
+          )
+        })
+
+        it('does not mutate the backgroundJobConfig of the model', async () => {
+          vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
+          await User.backgroundWith({ priority: 'last' }, 'classRunInBG', 'bottlearum')
+          expect(User.backgroundJobConfig.priority).toEqual('urgent')
+        })
+      })
+    })
+  })
+
+  describe('#backgroundWith', () => {
+    it('calls the instance method, passing args', async () => {
+      const user = await User.create({ email: 'a@b.com' })
+      const spy = vi.spyOn(User.prototype, 'instanceMethodToTest').mockImplementation(async () => {})
+      await user.backgroundWith(
+        { delay: { seconds: 15, jobId: 'myjob' }, priority: 'last' },
+        'instanceRunInBG',
+        'bottlearum',
+      )
+      expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
+    })
+
+    context('when the model is destroyed before the background job picks it up', () => {
+      it('does not throw an error', async () => {
+        const user = await User.create({ email: 'a@b.com' })
+        await user.destroy()
+        await expect(
+          user.backgroundWith({ priority: 'last' }, 'instanceRunInBG', 'bottlearum'),
+        ).resolves.not.toThrow()
+      })
+    })
+
+    context('priority and named workstream', () => {
+      let originalTestInvocation: PsychicWorkersAppTestInvocationType
+
+      beforeEach(async () => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        originalTestInvocation = workersApp.testInvocation
+        workersApp.set('testInvocation', 'manual')
+
+        await WorkerTestUtils.clean()
+      })
+
+      afterEach(() => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        workersApp.set('testInvocation', originalTestInvocation)
+      })
+
+      context('with only a priority', () => {
+        it('overrides the priority within the group object and does not delay', async () => {
+          const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
+          const user = await User.create({ email: 'a@b.com' })
+
+          await user.backgroundWith({ priority: 'not_urgent' }, 'instanceRunInBG', 'bottlearum')
+
+          expect(spy).toHaveBeenCalledWith(
+            'BackgroundJobQueueModelInstanceJob',
+            {
+              globalName: User.globalName,
+              args: ['bottlearum'],
+              id: user.id,
+              method: 'instanceRunInBG',
+            },
+            { group: { id: 'snazzy', priority: 3 } },
+          )
+        })
+      })
+
+      context('with a delay and a priority', () => {
+        it('delays the job and overrides the priority within the group object', async () => {
+          const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
+          const user = await User.create({ email: 'a@b.com' })
+
+          await user.backgroundWith(
+            { delay: { seconds: 7, jobId: 'myjob' }, priority: 'last' },
+            'instanceRunInBG',
+            'bottlearum',
+          )
+
+          expect(spy).toHaveBeenCalledWith(
+            'BackgroundJobQueueModelInstanceJob',
+            {
+              globalName: User.globalName,
+              args: ['bottlearum'],
+              id: user.id,
+              method: 'instanceRunInBG',
+            },
+            {
+              deduplication: {
+                extend: true,
+                id: 'myjob',
+                replace: true,
+                ttl: 7000,
+              },
+              delay: 7000,
+              group: { id: 'snazzy', priority: 4 },
+            },
+          )
+        })
+      })
+    })
+  })
 })

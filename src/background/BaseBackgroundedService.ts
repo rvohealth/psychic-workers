@@ -1,7 +1,7 @@
 import { GlobalNameNotSet } from '@rvoh/dream/errors'
 import { Job } from 'bullmq'
 import durationToSeconds from '../helpers/durationToSeconds.js'
-import { BackgroundJobConfig, DelayedJobOpts } from '../types/background.js'
+import { BackgroundJobConfig, BackgroundWithOpts, DelayedJobOpts } from '../types/background.js'
 import { FunctionPropertyNames } from '../types/utils.js'
 import background from './index.js'
 
@@ -96,6 +96,8 @@ export default class BaseBackgroundedService {
    * method, preventing you from needing to explicitly wait for queues to flush
    * before making assertions.
    *
+   * @deprecated use `backgroundWith({ delay }, methodName, ...args)` instead. This method will be removed in a future major version.
+   *
    * @param delaySeconds - the amount of time (in seconds) you want to hold off before allowing the job to run
    * @param methodName - the name of the static method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
@@ -118,6 +120,50 @@ export default class BaseBackgroundedService {
   }
 
   /**
+   * runs the specified method in a background queue, driven by BullMQ,
+   * sending in the provided args, along with an options object which can
+   * be used to delay the job and/or override the priority provided by
+   * the `backgroundJobConfig` getter on this service.
+   *
+   * ```ts
+   * await MyBackgroundableClass.backgroundWith(
+   *   { delay: { seconds: 30, jobId: 'my-unique-job-id' }, priority: 'urgent' },
+   *   'myMethod',
+   *   'abc',
+   *   123,
+   * )
+   * ```
+   * though calling backgroundWith must be awaited, the resolution of the promise
+   * is an indication that the job was put in the queue, not that it has
+   * completed.
+   *
+   * NOTE: in test environments, psychic will immediately invoke the underlying
+   * method, preventing you from needing to explicitly wait for queues to flush
+   * before making assertions.
+   *
+   * @param opts - options for backgrounding this job
+   * @param opts.delay - (optional) the amount of time you want to hold off before allowing the job to run, and an optional `jobId` which debounces repeated calls within the delay window
+   * @param opts.priority - (optional) a priority which, when provided, overrides the priority provided by `backgroundJobConfig`
+   * @param methodName - the name of the static method you wish to run in the background
+   * @param args - a variadic list of arguments to be sent to your method
+   */
+  public static async backgroundWith<
+    T,
+    MethodName extends PsychicBackgroundedServiceStaticMethods<T & typeof BaseBackgroundedService>,
+    MethodFunc extends T[MethodName & keyof T],
+    MethodArgs extends BackgroundableMethodArgs<MethodFunc>,
+  >(this: T, opts: BackgroundWithOpts, methodName: MethodName, ...args: MethodArgs) {
+    const safeThis: typeof BaseBackgroundedService = this as typeof BaseBackgroundedService
+
+    return await background.staticMethod(safeThis, methodName, {
+      globalName: safeThis.globalName,
+      ...(opts.delay ? { delaySeconds: durationToSeconds(opts.delay), jobId: opts.delay.jobId } : {}),
+      args,
+      jobConfig: mergeBackgroundWithOptsIntoJobConfig(safeThis.backgroundJobConfig, opts),
+    })
+  }
+
+  /**
    * types composed by psychic must be provided, since psychic-workers leverages
    * the sync command in psychic to read your backgroundable services and extract
    * metadata, which can be used to help provide types for the underlying methods
@@ -129,6 +175,22 @@ export default class BaseBackgroundedService {
       'Must define psychicWorkerTypes getter in ApplicationBackgroundedService class within your application',
     )
   }
+}
+
+/**
+ * @internal
+ *
+ * returns a copy of the provided job config, with the priority
+ * replaced by the priority found in the `backgroundWith` opts,
+ * if one was provided.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function mergeBackgroundWithOptsIntoJobConfig<T extends BackgroundJobConfig<any>>(
+  jobConfig: T,
+  opts: BackgroundWithOpts,
+): T {
+  if (!opts.priority) return jobConfig
+  return { ...jobConfig, priority: opts.priority }
 }
 
 export type PsychicBackgroundedServiceStaticMethods<T extends typeof BaseBackgroundedService> = Exclude<

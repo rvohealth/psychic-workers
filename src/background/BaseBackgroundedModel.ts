@@ -1,7 +1,7 @@
 import { Dream } from '@rvoh/dream'
-import { BackgroundJobConfig, DelayedJobOpts } from '../types/background.js'
+import { BackgroundJobConfig, BackgroundWithOpts, DelayedJobOpts } from '../types/background.js'
 import { FunctionPropertyNames } from '../types/utils.js'
-import { BackgroundableMethodArgs } from './BaseBackgroundedService.js'
+import { BackgroundableMethodArgs, mergeBackgroundWithOptsIntoJobConfig } from './BaseBackgroundedService.js'
 import background from './index.js'
 import durationToSeconds from '../helpers/durationToSeconds.js'
 
@@ -84,6 +84,8 @@ export default class BaseBackgroundedModel extends Dream {
    * method, preventing you from needing to explicitly wait for queues to flush
    * before making assertions.
    *
+   * @deprecated use `backgroundWith({ delay }, methodName, ...args)` instead. This method will be removed in a future major version.
+   *
    * @param delaySeconds - the amount of time (in seconds) you want to hold off before allowing the job to run
    * @param methodName - the name of the static method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
@@ -102,6 +104,45 @@ export default class BaseBackgroundedModel extends Dream {
       jobId: delay.jobId,
       args,
       jobConfig: safeThis.backgroundJobConfig,
+    })
+  }
+
+  /**
+   * runs the specified method in a background queue, driven by BullMQ,
+   * sending in the provided args, along with an options object which can
+   * be used to delay the job and/or override the priority provided by
+   * the `backgroundJobConfig` getter on this model.
+   *
+   * ```ts
+   * await User.backgroundWith({ delay: { seconds: 30, jobId: 'my-unique-job-id' }, priority: 'urgent' }, 'myMethod', 'abc', 123)
+   * ```
+   * though calling backgroundWith must be awaited, the resolution of the promise
+   * is an indication that the job was put in the queue, not that it has
+   * completed.
+   *
+   * NOTE: in test environments, psychic will immediately invoke the underlying
+   * method, preventing you from needing to explicitly wait for queues to flush
+   * before making assertions.
+   *
+   * @param opts - options for backgrounding this job
+   * @param opts.delay - (optional) the amount of time you want to hold off before allowing the job to run, and an optional `jobId` which debounces repeated calls within the delay window
+   * @param opts.priority - (optional) a priority which, when provided, overrides the priority provided by `backgroundJobConfig`
+   * @param methodName - the name of the static method you wish to run in the background
+   * @param args - a variadic list of arguments to be sent to your method
+   */
+  public static async backgroundWith<
+    T,
+    MethodName extends PsychicBackgroundedModelStaticMethods<T & typeof BaseBackgroundedModel>,
+    MethodFunc extends T[MethodName & keyof T],
+    MethodArgs extends BackgroundableMethodArgs<MethodFunc>,
+  >(this: T, opts: BackgroundWithOpts, methodName: MethodName, ...args: MethodArgs) {
+    const safeThis: typeof BaseBackgroundedModel = this as typeof BaseBackgroundedModel
+
+    return await background.staticMethod(safeThis, methodName, {
+      globalName: safeThis.globalName,
+      ...(opts.delay ? { delaySeconds: durationToSeconds(opts.delay), jobId: opts.delay.jobId } : {}),
+      args,
+      jobConfig: mergeBackgroundWithOptsIntoJobConfig(safeThis.backgroundJobConfig, opts),
     })
   }
 
@@ -169,6 +210,8 @@ export default class BaseBackgroundedModel extends Dream {
    * method, preventing you from needing to explicitly wait for queues to flush
    * before making assertions.
    *
+   * @deprecated use `backgroundWith({ delay }, methodName, ...args)` instead. This method will be removed in a future major version.
+   *
    * @param delaySeconds - the amount of time (in seconds) you want to hold off before allowing the job to run
    * @param methodName - the name of the static method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
@@ -186,6 +229,45 @@ export default class BaseBackgroundedModel extends Dream {
       delaySeconds: durationToSeconds(delay),
       jobId: delay.jobId,
       jobConfig: safeThis.backgroundJobConfig,
+    })
+  }
+
+  /**
+   * runs the specified method in a background queue, driven by BullMQ,
+   * sending in the provided args, along with an options object which can
+   * be used to delay the job and/or override the priority provided by
+   * the `backgroundJobConfig` getter on this model.
+   *
+   * ```ts
+   * const user = await User.lastOrFail()
+   * await user.backgroundWith({ delay: { seconds: 30, jobId: 'my-unique-job-id' }, priority: 'urgent' }, 'myMethod', 'abc', 123)
+   * ```
+   * though calling backgroundWith must be awaited, the resolution of the promise
+   * is an indication that the job was put in the queue, not that it has
+   * completed.
+   *
+   * NOTE: in test environments, psychic will immediately invoke the underlying
+   * method, preventing you from needing to explicitly wait for queues to flush
+   * before making assertions.
+   *
+   * @param opts - options for backgrounding this job
+   * @param opts.delay - (optional) the amount of time you want to hold off before allowing the job to run, and an optional `jobId` which debounces repeated calls within the delay window
+   * @param opts.priority - (optional) a priority which, when provided, overrides the priority provided by `backgroundJobConfig`
+   * @param methodName - the name of the instance method you wish to run in the background
+   * @param args - a variadic list of arguments to be sent to your method
+   */
+  public async backgroundWith<
+    T,
+    MethodName extends PsychicBackgroundedServiceInstanceMethods<T & BaseBackgroundedModel>,
+    MethodFunc extends T[MethodName & keyof T],
+    MethodArgs extends BackgroundableMethodArgs<MethodFunc>,
+  >(this: T, opts: BackgroundWithOpts, methodName: MethodName, ...args: MethodArgs) {
+    const safeThis: BaseBackgroundedModel = this as BaseBackgroundedModel
+
+    return await background.modelInstanceMethod(safeThis, methodName, {
+      args,
+      ...(opts.delay ? { delaySeconds: durationToSeconds(opts.delay), jobId: opts.delay.jobId } : {}),
+      jobConfig: mergeBackgroundWithOptsIntoJobConfig(safeThis.backgroundJobConfig, opts),
     })
   }
 }

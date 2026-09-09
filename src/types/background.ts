@@ -63,6 +63,22 @@ export type JobTypes =
 
 export type BackgroundQueuePriority = 'default' | 'urgent' | 'not_urgent' | 'last'
 
+export interface BackgroundWithOpts {
+  /**
+   * an optional delay to hold off the job for a certain amount of
+   * time after it is entered into the queue. Accepts the same options
+   * as `backgroundWithDelay`, including an optional `jobId` which
+   * debounces repeated calls within the delay window.
+   */
+  delay?: DelayedJobOpts
+
+  /**
+   * an optional priority. When provided, this overrides the priority
+   * set on the `backgroundJobConfig` of the service or model.
+   */
+  priority?: BackgroundQueuePriority
+}
+
 interface BaseBackgroundJobConfig {
   priority?: BackgroundQueuePriority
   // TODO: accept T generic, if BaseScheduledService,

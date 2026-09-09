@@ -317,4 +317,167 @@ describe('a backgrounded service', () => {
       })
     })
   })
+
+  describe('.backgroundWith', () => {
+    it('calls the static method, passing args', async () => {
+      const spy = vi.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
+      await DummyService.backgroundWith({}, 'classRunInBG', 'bottlearum')
+      expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
+    })
+
+    context('attempting to background an entire Dream model', () => {
+      it('throws AttemtedToBackgroundEntireDreamModel', async () => {
+        const user = await createUser()
+        await expect(
+          DummyService.backgroundWith({ priority: 'urgent' }, 'classRunInBG', user),
+        ).rejects.toThrow(AttemtedToBackgroundEntireDreamModel)
+      })
+    })
+
+    context('queue options', () => {
+      let spy: MockInstance
+      let originalTestInvocation: PsychicWorkersAppTestInvocationType
+
+      beforeEach(async () => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        originalTestInvocation = workersApp.testInvocation
+        workersApp.set('testInvocation', 'manual')
+
+        background.connect()
+        spy = vi.spyOn(background.queues[0]!, 'add').mockResolvedValue({} as Job)
+
+        await WorkerTestUtils.clean()
+      })
+
+      afterEach(() => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        workersApp.set('testInvocation', originalTestInvocation)
+      })
+
+      function expectAddedToQueue(
+        serviceClass: typeof DummyService | typeof UrgentDummyService | typeof LastDummyService,
+        bullmqOpts: object,
+      ) {
+        expect(spy).toHaveBeenCalledWith(
+          'BackgroundJobQueueStaticJob',
+          {
+            globalName: `services/${serviceClass.name}`,
+            args: ['bottlearum'],
+            importKey: undefined,
+            method: 'classRunInBG',
+          },
+          bullmqOpts,
+        )
+      }
+
+      context('with no options', () => {
+        it('uses the priority from backgroundJobConfig and does not delay', async () => {
+          await UrgentDummyService.backgroundWith({}, 'classRunInBG', 'bottlearum')
+          expectAddedToQueue(UrgentDummyService, { priority: 1 })
+        })
+      })
+
+      context('with a priority', () => {
+        it('overrides the priority from backgroundJobConfig', async () => {
+          await UrgentDummyService.backgroundWith({ priority: 'last' }, 'classRunInBG', 'bottlearum')
+          expectAddedToQueue(UrgentDummyService, { priority: 4 })
+        })
+
+        it('overrides the default priority when backgroundJobConfig does not specify one', async () => {
+          await DummyService.backgroundWith({ priority: 'urgent' }, 'classRunInBG', 'bottlearum')
+          expectAddedToQueue(DummyService, { priority: 1 })
+        })
+
+        it('does not mutate the backgroundJobConfig of the service', async () => {
+          await UrgentDummyService.backgroundWith({ priority: 'last' }, 'classRunInBG', 'bottlearum')
+          expect(UrgentDummyService.backgroundJobConfig.priority).toEqual('urgent')
+        })
+      })
+
+      context('with a delay', () => {
+        it('delays and deduplicates the job, preserving the priority from backgroundJobConfig', async () => {
+          await LastDummyService.backgroundWith(
+            { delay: { seconds: 7, jobId: 'myjob' } },
+            'classRunInBG',
+            'bottlearum',
+          )
+          expectAddedToQueue(LastDummyService, {
+            deduplication: {
+              extend: true,
+              id: 'myjob',
+              replace: true,
+              ttl: 7000,
+            },
+            delay: 7000,
+            priority: 4,
+          })
+        })
+      })
+
+      context('with both a delay and a priority', () => {
+        it('delays the job and overrides the priority', async () => {
+          await LastDummyService.backgroundWith(
+            { delay: { minutes: 1, jobId: 'myjob' }, priority: 'urgent' },
+            'classRunInBG',
+            'bottlearum',
+          )
+          expectAddedToQueue(LastDummyService, {
+            deduplication: {
+              extend: true,
+              id: 'myjob',
+              replace: true,
+              ttl: 60000,
+            },
+            delay: 60000,
+            priority: 1,
+          })
+        })
+      })
+    })
+
+    context('named workstream', () => {
+      let originalTestInvocation: PsychicWorkersAppTestInvocationType
+      beforeEach(async () => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        originalTestInvocation = workersApp.testInvocation
+        workersApp.set('testInvocation', 'manual')
+
+        await WorkerTestUtils.clean()
+      })
+
+      afterEach(() => {
+        const workersApp = PsychicAppWorkers.getOrFail()
+        workersApp.set('testInvocation', originalTestInvocation)
+      })
+
+      it('preserves the workstream and moves the overridden priority into the group object', async () => {
+        const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
+        await LastDummyServiceInNamedWorkstream.backgroundWith(
+          { delay: { seconds: 7, jobId: 'myjob' }, priority: 'urgent' },
+          'classRunInBG',
+          'bottlearum',
+        )
+
+        expect(spy).toHaveBeenCalledWith(
+          'BackgroundJobQueueStaticJob',
+          {
+            globalName: 'services/LastDummyServiceInNamedWorkstream',
+            args: ['bottlearum'],
+            importKey: undefined,
+            method: 'classRunInBG',
+          },
+          {
+            deduplication: {
+              extend: true,
+              id: 'myjob',
+              replace: true,
+              ttl: 7000,
+            },
+            delay: 7000,
+            group: { id: 'snazzy', priority: 1 },
+          },
+        )
+      })
+    })
+  })
 })
