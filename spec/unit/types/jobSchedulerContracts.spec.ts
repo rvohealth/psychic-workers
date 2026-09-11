@@ -3,6 +3,8 @@ import type {
   PsychicJobSchedulerOrigin,
   PsychicJobSchedulerRoute,
 } from '../../../src/package-exports/types.js'
+import BaseBackgroundedModel from '../../../src/background/BaseBackgroundedModel.js'
+import BaseBackgroundedService from '../../../src/background/BaseBackgroundedService.js'
 import BaseScheduledService from '../../../src/background/BaseScheduledService.js'
 
 describe('Psychic job scheduler public contracts', () => {
@@ -55,6 +57,62 @@ describe('Psychic job scheduler public contracts', () => {
 
       // Existing schedule deliberately retains its broader FunctionPropertyNames signature.
       void DigestService.schedule('* * * * *', 'deliver', 'hello')
+      void DigestService.schedule('* * * * *', 'unschedule', locator)
+
+      // @ts-expect-error inherited base utilities are not eligible scheduled methods for locators
+      DigestService.jobSchedulerLocator('unschedule')
+
+      // @ts-expect-error backgrounded services do not expose scheduled-job APIs
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      BaseBackgroundedService.schedule('* * * * *', 'background')
+      // @ts-expect-error backgrounded services do not expose scheduler locators
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      BaseBackgroundedService.jobSchedulerLocator('background')
+      // @ts-expect-error backgrounded models do not expose scheduled-job APIs
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      BaseBackgroundedModel.schedule('* * * * *', 'background')
+      // @ts-expect-error backgrounded models do not expose unscheduling
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      BaseBackgroundedModel.unschedule(locator)
+
+      const schedulerWithoutBullMQInternals: PsychicJobScheduler = {
+        locator,
+        globalName: 'services/DigestService',
+        method: 'deliver',
+        pattern: '* * * * *',
+        origin: {
+          generation: 'generation-token',
+          source: 'current',
+          route: { kind: 'default' },
+        },
+        // @ts-expect-error raw BullMQ queues are not public scheduler metadata
+        queue: {},
+      }
+      void schedulerWithoutBullMQInternals
+
+      const schedulerWithoutSerializedArgs: PsychicJobScheduler = {
+        locator,
+        globalName: 'services/DigestService',
+        method: 'deliver',
+        pattern: '* * * * *',
+        origin: {
+          generation: 'generation-token',
+          source: 'current',
+          route: { kind: 'default' },
+        },
+        // @ts-expect-error serialized job arguments are not public scheduler metadata
+        args: [],
+      }
+      void schedulerWithoutSerializedArgs
+
+      const originWithoutRedis: PsychicJobSchedulerOrigin = {
+        generation: 'generation-token',
+        source: 'current',
+        route: { kind: 'default' },
+        // @ts-expect-error Redis connections are not part of public origins
+        connection: {},
+      }
+      void originWithoutRedis
       void removal
     }
 

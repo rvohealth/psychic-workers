@@ -6,6 +6,7 @@ import DefaultDummyScheduledService from '../../../test-app/src/app/services/Def
 describe('a scheduled service', () => {
   it('derives a local locator for an eligible child method', () => {
     const serviceClass = DefaultDummyScheduledService
+    const connect = vi.spyOn(background, 'connect')
 
     const locator = serviceClass.jobSchedulerLocator('classRunInBg')
 
@@ -14,6 +15,7 @@ describe('a scheduled service', () => {
       method: 'classRunInBg',
       route: { kind: 'default' },
     })
+    expect(connect).not.toHaveBeenCalled()
   })
 
   it('lets a base-class-only seed delegate a hard-coded locator to Background', async () => {

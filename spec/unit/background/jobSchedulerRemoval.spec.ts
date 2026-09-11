@@ -159,6 +159,7 @@ describe('Background#removeJobScheduler', () => {
   it('returns true then false when two origins alias the same scheduler state', async () => {
     const background = freshBackground({
       defaultQueueConnection: currentConnection,
+      defaultWorkerConnection: undefined,
       transitionalWorkstreams: {
         defaultQueueConnection: currentConnection,
         defaultWorkerConnection: undefined,
@@ -188,6 +189,55 @@ describe('Background#removeJobScheduler', () => {
       background.removeJobScheduler(rowFor(rows, 'transitional', { kind: 'default' })),
     ).resolves.toBe(false)
     expect(transitionalRemove).toHaveBeenCalledOnce()
+  })
+
+  it('returns true then false when default and named origins alias the same queue keyspace', async () => {
+    PsychicAppWorkers.getOrFail().set('background', {
+      defaultQueueConnection: currentConnection,
+      defaultWorkerConnection: undefined,
+      namedWorkstreams: [{ name: Background.defaultQueueName }],
+    })
+    const background = new Background()
+    background.connect()
+    const rows = await rowsFor(background, [bullmq.queues[0]!, bullmq.queues[1]!], 'services/Aliased', 'run')
+    let schedulerExists = true
+    const removeSharedScheduler = () => {
+      const removed = schedulerExists
+      schedulerExists = false
+      return Promise.resolve(removed)
+    }
+    vi.spyOn(bullmq.queues[0]!, 'removeJobScheduler').mockImplementation(removeSharedScheduler)
+    vi.spyOn(bullmq.queues[1]!, 'removeJobScheduler').mockImplementation(removeSharedScheduler)
+
+    await expect(background.removeJobScheduler(rowFor(rows, 'current', { kind: 'default' }))).resolves.toBe(
+      true,
+    )
+    await expect(
+      background.removeJobScheduler(
+        rowFor(rows, 'current', { kind: 'named', name: Background.defaultQueueName }),
+      ),
+    ).resolves.toBe(false)
+  })
+
+  it('keeps an old-route scheduler discoverable and exactly removable after a service route changes', async () => {
+    PsychicAppWorkers.getOrFail().set('background', {
+      defaultQueueConnection: currentConnection,
+      defaultWorkerConnection: undefined,
+      namedWorkstreams: [{ name: 'old-mailers' }, { name: 'new-mailers' }],
+    })
+    const background = new Background()
+    background.connect()
+    bullmq.queues[1]!.returnedJobSchedulers = [scheduler('services/Mailers', 'deliver')]
+    const [oldRouteRow] = await background.getJobSchedulers()
+    const newRouteLocator = background.jobSchedulerIdentity('services/Mailers', 'deliver', {
+      workstream: 'new-mailers',
+    }).locator
+    const removeOldRoute = vi.spyOn(bullmq.queues[1]!, 'removeJobScheduler').mockResolvedValue(true)
+
+    await expect(background.unscheduleByLocator(newRouteLocator)).resolves.toBe(false)
+    expect(removeOldRoute).not.toHaveBeenCalled()
+    await expect(background.removeJobScheduler(oldRouteRow!)).resolves.toBe(true)
+    expect(removeOldRoute).toHaveBeenCalledWith('services/Mailers:deliver')
   })
 
   it('rejects contradictory identity metadata before any BullMQ mutation', async () => {

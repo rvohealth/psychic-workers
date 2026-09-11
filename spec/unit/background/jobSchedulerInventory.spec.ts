@@ -30,7 +30,7 @@ describe('Background#getJobSchedulers', () => {
       key: `${globalName}:${method}`,
       name: 'BackgroundJobQueueStaticJob',
       pattern,
-      next,
+      ...(next === undefined ? {} : { next }),
       template: { data: { globalName, method, args: [] } },
     }
   }
@@ -143,13 +143,20 @@ describe('Background#getJobSchedulers', () => {
   })
 
   it('excludes foreign and malformed scheduler entries instead of interpreting their keys', async () => {
-    const background = freshBackground({ defaultQueueConnection: currentConnection })
+    const background = freshBackground({
+      defaultQueueConnection: currentConnection,
+      defaultWorkerConnection: undefined,
+    })
     background.connect()
     bullmq.queues[0]!.returnedJobSchedulers = [
       scheduler('services/Valid', 'run', '* * * * *'),
       { ...scheduler('services/Foreign', 'run', '* * * * *'), name: 'foreign-job' },
       { ...scheduler('services/WrongKey', 'run', '* * * * *'), key: 'parse:me:instead' },
-      { ...scheduler('services/NoPattern', 'run', '* * * * *'), pattern: undefined },
+      {
+        ...scheduler('services/NoPattern', 'run', '* * * * *'),
+        pattern: undefined,
+      } as unknown as JobSchedulerJson<unknown>,
+      { ...scheduler('services/InvalidNext', 'run', '* * * * *'), next: Number.POSITIVE_INFINITY },
       {
         key: 'services/NoArgs:run',
         name: 'BackgroundJobQueueStaticJob',
@@ -172,6 +179,7 @@ describe('Background#getJobSchedulers', () => {
   it('returns separate observations when configured origins alias shared scheduler state', async () => {
     const background = freshBackground({
       defaultQueueConnection: currentConnection,
+      defaultWorkerConnection: undefined,
       transitionalWorkstreams: {
         defaultQueueConnection: currentConnection,
         defaultWorkerConnection: undefined,
@@ -191,8 +199,32 @@ describe('Background#getJobSchedulers', () => {
     expect(new Set(inventory.map(row => row.origin.generation))).toHaveLength(1)
   })
 
+  it('returns the per-origin observations that completed even when aliased state changes between reads', async () => {
+    const background = freshBackground({
+      defaultQueueConnection: currentConnection,
+      defaultWorkerConnection: undefined,
+      transitionalWorkstreams: {
+        defaultQueueConnection: currentConnection,
+        defaultWorkerConnection: undefined,
+      },
+    })
+    background.connect()
+    const sharedScheduler = scheduler('services/Aliased', 'run', '* * * * *')
+    vi.spyOn(bullmq.queues[0]!, 'getJobSchedulers').mockResolvedValue([sharedScheduler])
+    vi.spyOn(bullmq.queues[1]!, 'getJobSchedulers').mockResolvedValue([])
+
+    const inventory = await background.getJobSchedulers()
+
+    expect(inventory).toHaveLength(1)
+    expect(inventory[0]!.globalName).toBe('services/Aliased')
+    expect(inventory[0]!.origin.source).toBe('current')
+  })
+
   it('returns an empty array when every configured origin is empty', async () => {
-    const background = freshBackground({ defaultQueueConnection: currentConnection })
+    const background = freshBackground({
+      defaultQueueConnection: currentConnection,
+      defaultWorkerConnection: undefined,
+    })
 
     await expect(background.getJobSchedulers()).resolves.toEqual([])
   })
@@ -200,6 +232,7 @@ describe('Background#getJobSchedulers', () => {
   it('rejects the whole inventory when any configured queue read fails', async () => {
     const background = freshBackground({
       defaultQueueConnection: currentConnection,
+      defaultWorkerConnection: undefined,
       namedWorkstreams: [{ name: 'mailers' }],
       transitionalWorkstreams: {
         defaultQueueConnection: transitionalConnection,

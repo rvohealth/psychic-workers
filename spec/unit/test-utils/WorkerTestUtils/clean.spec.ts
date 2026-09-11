@@ -40,4 +40,23 @@ describe('.clean', () => {
       expect(await allDelayedJobs()).toHaveLength(0)
     })
   })
+
+  context('with a foreign BullMQ scheduler', () => {
+    it('clears it without routing broad cleanup through Psychic-only inventory', async () => {
+      background.connect()
+      const queue = background.queues[0]!
+      await queue.upsertJobScheduler(
+        'foreign:scheduler',
+        { pattern: '0 12 1 1 *' },
+        { name: 'ForeignSchedulerJob', data: { owner: 'another-bullmq-consumer' } },
+      )
+
+      expect(await background.getJobSchedulers()).toEqual([])
+      expect(await queue.getJobSchedulers()).toHaveLength(1)
+
+      await WorkerTestUtils.clean()
+
+      expect(await queue.getJobSchedulers()).toEqual([])
+    })
+  })
 })
