@@ -238,6 +238,35 @@ export class Background {
   }
 
   /**
+   * Removes the scheduler represented by an inventory row from that row's
+   * exact configured queue origin.
+   */
+  public async removeJobScheduler(jobScheduler: PsychicJobScheduler): Promise<boolean> {
+    this.connect()
+
+    const identity = this.jobSchedulerIdentityFromLocator(jobScheduler.locator)
+    if (
+      identity.globalName !== jobScheduler.globalName ||
+      identity.method !== jobScheduler.method ||
+      !this.jobSchedulerRoutesMatch(identity.route, jobScheduler.origin.route)
+    )
+      throw new Error('Job scheduler metadata does not match its locator')
+
+    if (jobScheduler.origin.generation !== this.jobSchedulerTopologyGeneration)
+      throw new Error('Job scheduler origin belongs to a different Background generation')
+
+    const topologyEntry = this.jobSchedulerQueueTopology.find(
+      ({ origin }) =>
+        origin.generation === jobScheduler.origin.generation &&
+        origin.source === jobScheduler.origin.source &&
+        this.jobSchedulerRoutesMatch(origin.route, jobScheduler.origin.route),
+    )
+    if (!topologyEntry) throw new Error('No configured queue matches this job scheduler origin')
+
+    return await topologyEntry.queue.removeJobScheduler(identity.jobSchedulerId)
+  }
+
+  /**
    * @internal
    *
    * Produces the shared queue-local identity and portable locator for a Psychic
