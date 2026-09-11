@@ -1,3 +1,7 @@
+## 2.6.0
+
+- maintenance: refresh the repository's development tooling to Vitest 4.1.11 and patched `@vitest/mocker`, `js-yaml`, `fast-uri`, and `@humanfs/node` resolutions. Consumer-installed dependency and peer-dependency declarations are unchanged; this does not remediate a consumer application's independently resolved `@rvoh/psychic`/`fast-uri` dependency graph.
+
 ## 2.5.0
 
 - add `backgroundWith` to `BaseBackgroundedService` (static) and `BaseBackgroundedModel` (static and instance). It takes `{ delay?: DelayedJobOpts; priority?: BackgroundQueuePriority }` as its first argument, followed by the method name and args. When `priority` is provided, it overrides the priority from `backgroundJobConfig` for that call only; `workstream`, `queue`, and `groupId` are preserved and the config object is not mutated. `delay` accepts the same options as `backgroundWithDelay`, including an optional `jobId` which debounces repeated calls within the delay window, e.g. `MyService.backgroundWith({ delay: { seconds: 30, jobId: 'my-unique-job-id' }, priority: 'urgent' }, 'myMethod', 'abc')`.
