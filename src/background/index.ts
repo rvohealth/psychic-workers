@@ -1,7 +1,8 @@
 import { Dream } from '@rvoh/dream'
 import { closeAllDbConnections } from '@rvoh/dream/db'
-import { compact, pascalize } from '@rvoh/dream/utils'
+import { pascalize } from '@rvoh/dream/utils'
 import { PsychicApp } from '@rvoh/psychic'
+import { randomUUID } from 'node:crypto'
 import {
   Job,
   JobSchedulerTemplateOptions,
@@ -14,6 +15,8 @@ import {
 import ActivatingBackgroundWorkersWithoutDefaultWorkerConnection from '../error/background/ActivatingBackgroundWorkersWithoutDefaultWorkerConnection.js'
 import ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection from '../error/background/ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection.js'
 import DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
+import DuplicateNamedWorkstream from '../error/background/DuplicateNamedWorkstream.js'
+import InvalidJobSchedulerLocator from '../error/background/InvalidJobSchedulerLocator.js'
 import NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
 import NoClassForSpecifiedGlobalName from '../error/background/NoClassForSpecifiedGlobalName.js'
 import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName.js'
@@ -35,12 +38,34 @@ import {
   BackgroundJobData,
   BackgroundQueuePriority,
   JobTypes,
+  PsychicJobSchedulerOrigin,
+  PsychicJobSchedulerRoute,
   QueueBackgroundJobConfig,
   WorkstreamBackgroundJobConfig,
 } from '../types/background.js'
 import nameToRedisQueueName from './helpers/nameToRedisQueueName.js'
 
 const DEFAULT_CONCURRENCY = 10
+const JOB_SCHEDULER_LOCATOR_PREFIX = 'psychic-job-scheduler'
+const JOB_SCHEDULER_LOCATOR_VERSION = 'v1'
+
+interface JobSchedulerIdentity {
+  jobSchedulerId: string
+  locator: string
+  globalName: string
+  method: string
+  route: PsychicJobSchedulerRoute
+}
+
+interface JobSchedulerRoutingConfig {
+  workstream?: string
+  queue?: string
+}
+
+interface JobSchedulerQueueTopology {
+  queue: Queue
+  origin: PsychicJobSchedulerOrigin
+}
 
 /**
  * the underlying class driving the `background` singleton,
@@ -124,6 +149,20 @@ export class Background {
   /**
    * @internal
    *
+   * Origin-aware queue topology used by scheduler inventory and exact removal.
+   */
+  private readonly jobSchedulerQueueTopology: JobSchedulerQueueTopology[] = []
+
+  /**
+   * @internal
+   *
+   * Binds exact queue origins to the Background instance that constructed them.
+   */
+  private readonly jobSchedulerTopologyGeneration = randomUUID()
+
+  /**
+   * @internal
+   *
    * All of the workers that are currently registered
    */
   private _workers: Worker[] = []
@@ -146,20 +185,21 @@ export class Background {
     if (this.defaultQueue) return
 
     const psychicWorkersApp = PsychicAppWorkers.getOrFail()
-    const defaultBullMQQueueOptions = psychicWorkersApp.backgroundOptions.defaultBullMQQueueOptions || {}
+    const backgroundOptions = psychicWorkersApp.backgroundOptions
+    this.validateNamedWorkstreamConfiguration(backgroundOptions)
 
-    if ((psychicWorkersApp.backgroundOptions as PsychicBackgroundNativeBullMQOptions).nativeBullMQ) {
+    const defaultBullMQQueueOptions = backgroundOptions.defaultBullMQQueueOptions || {}
+
+    if ((backgroundOptions as PsychicBackgroundNativeBullMQOptions).nativeBullMQ) {
       this.nativeBullMQConnect(
         defaultBullMQQueueOptions,
-        psychicWorkersApp.backgroundOptions as PsychicBackgroundNativeBullMQOptions,
+        backgroundOptions as PsychicBackgroundNativeBullMQOptions,
         { activateWorkers },
       )
     } else {
-      this.simpleConnect(
-        defaultBullMQQueueOptions,
-        psychicWorkersApp.backgroundOptions as PsychicBackgroundSimpleOptions,
-        { activateWorkers },
-      )
+      this.simpleConnect(defaultBullMQQueueOptions, backgroundOptions as PsychicBackgroundSimpleOptions, {
+        activateWorkers,
+      })
     }
   }
 
@@ -167,12 +207,144 @@ export class Background {
    * Returns all the queues in your application
    */
   public get queues(): Queue[] {
-    return compact([
-      this.defaultQueue,
-      ...Object.values(this.namedQueues).map(queue => queue),
-      this.defaultTransitionalQueue,
-      ...Object.values(this.namedTransitionalQueues).map(queue => queue),
-    ])
+    return this.jobSchedulerQueueTopology.map(({ queue }) => queue)
+  }
+
+  /**
+   * @internal
+   *
+   * Produces the shared queue-local identity and portable locator for a Psychic
+   * scheduled static job. This method performs no queue construction or I/O.
+   */
+  public jobSchedulerIdentity(
+    globalName: string,
+    method: string,
+    jobConfig: JobSchedulerRoutingConfig = {},
+  ): JobSchedulerIdentity {
+    const route = this.jobSchedulerRoute(jobConfig)
+
+    return {
+      jobSchedulerId: this.jobSchedulerId(globalName, method),
+      locator: this.encodeJobSchedulerLocator(globalName, method, route),
+      globalName,
+      method,
+      route,
+    }
+  }
+
+  /**
+   * @internal
+   *
+   * Decodes any locator version supported by this major release into the shared
+   * scheduler identity. Unsupported or malformed values use a framework error.
+   */
+  public jobSchedulerIdentityFromLocator(locator: string): JobSchedulerIdentity {
+    const [prefix, version, encodedPayload, ...remainder] = locator.split(':')
+    if (
+      prefix !== JOB_SCHEDULER_LOCATOR_PREFIX ||
+      version !== JOB_SCHEDULER_LOCATOR_VERSION ||
+      !encodedPayload ||
+      remainder.length > 0
+    ) {
+      throw new InvalidJobSchedulerLocator()
+    }
+
+    const payloadBuffer = Buffer.from(encodedPayload, 'base64url')
+    if (payloadBuffer.toString('base64url') !== encodedPayload) throw new InvalidJobSchedulerLocator()
+
+    let payload: unknown
+    try {
+      payload = JSON.parse(payloadBuffer.toString('utf8'))
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error
+      throw new InvalidJobSchedulerLocator()
+    }
+
+    if (!Array.isArray(payload) || payload.length !== 3) throw new InvalidJobSchedulerLocator()
+
+    const [globalName, method, encodedRoute] = payload as unknown[]
+    if (typeof globalName !== 'string' || !globalName || typeof method !== 'string' || !method)
+      throw new InvalidJobSchedulerLocator()
+
+    const route = this.decodeJobSchedulerRoute(encodedRoute)
+    return {
+      jobSchedulerId: this.jobSchedulerId(globalName, method),
+      locator,
+      globalName,
+      method,
+      route,
+    }
+  }
+
+  private jobSchedulerId(globalName: string, method: string) {
+    return `${globalName}:${method}`
+  }
+
+  private jobSchedulerRoute(jobConfig: JobSchedulerRoutingConfig): PsychicJobSchedulerRoute {
+    if (typeof jobConfig.workstream === 'string') return { kind: 'named', name: jobConfig.workstream }
+    if (typeof jobConfig.queue === 'string') return { kind: 'named', name: jobConfig.queue }
+    return { kind: 'default' }
+  }
+
+  private encodeJobSchedulerLocator(globalName: string, method: string, route: PsychicJobSchedulerRoute) {
+    const encodedRoute =
+      route.kind === 'default' ? ['default'] : (['named', route.name] satisfies [string, string])
+    const payload = Buffer.from(JSON.stringify([globalName, method, encodedRoute]), 'utf8').toString(
+      'base64url',
+    )
+
+    return `${JOB_SCHEDULER_LOCATOR_PREFIX}:${JOB_SCHEDULER_LOCATOR_VERSION}:${payload}`
+  }
+
+  private decodeJobSchedulerRoute(encodedRoute: unknown): PsychicJobSchedulerRoute {
+    if (Array.isArray(encodedRoute) && encodedRoute.length === 1 && encodedRoute[0] === 'default')
+      return { kind: 'default' }
+
+    if (
+      Array.isArray(encodedRoute) &&
+      encodedRoute.length === 2 &&
+      encodedRoute[0] === 'named' &&
+      typeof encodedRoute[1] === 'string'
+    )
+      return { kind: 'named', name: encodedRoute[1] }
+
+    throw new InvalidJobSchedulerLocator()
+  }
+
+  private validateNamedWorkstreamConfiguration(
+    backgroundOptions: PsychicBackgroundNativeBullMQOptions | PsychicBackgroundSimpleOptions,
+  ) {
+    if ((backgroundOptions as PsychicBackgroundNativeBullMQOptions).nativeBullMQ) return
+
+    const simpleOptions = backgroundOptions as PsychicBackgroundSimpleOptions
+    this.validateNamedWorkstreams(simpleOptions.namedWorkstreams, 'current')
+    this.validateNamedWorkstreams(simpleOptions.transitionalWorkstreams?.namedWorkstreams, 'transitional')
+  }
+
+  private validateNamedWorkstreams(
+    workstreams: PsychicBackgroundWorkstreamOptions[] | undefined,
+    source: 'current' | 'transitional',
+  ) {
+    const names = new Set<string>()
+    for (const workstream of workstreams || []) {
+      if (names.has(workstream.name)) throw new DuplicateNamedWorkstream(workstream.name, source)
+      names.add(workstream.name)
+    }
+  }
+
+  private registerJobSchedulerQueue(
+    queue: Queue,
+    source: 'current' | 'transitional',
+    route: PsychicJobSchedulerRoute,
+  ) {
+    this.jobSchedulerQueueTopology.push({
+      queue,
+      origin: {
+        generation: this.jobSchedulerTopologyGeneration,
+        source,
+        route,
+      },
+    })
   }
 
   /**
@@ -343,6 +515,11 @@ export class Background {
     } else {
       this.defaultQueue = defaultQueue
     }
+    this.registerJobSchedulerQueue(
+      defaultQueue,
+      activatingTransitionalWorkstreams ? 'transitional' : 'current',
+      { kind: 'default' },
+    )
     ////////////////////////////////////
     // end: create default workstream //
     ////////////////////////////////////
@@ -399,6 +576,11 @@ export class Background {
         this.namedQueues[namedWorkstream.name] = namedQueue
         this.workstreamNames.push(namedWorkstream.name)
       }
+      this.registerJobSchedulerQueue(
+        namedQueue,
+        activatingTransitionalWorkstreams ? 'transitional' : 'current',
+        { kind: 'named', name: namedWorkstream.name },
+      )
 
       //////////////////////////
       // create named workers //
@@ -479,6 +661,7 @@ export class Background {
       ...nativeBullMQ.defaultQueueOptions,
       connection: defaultQueueConnection,
     })
+    this.registerJobSchedulerQueue(this.defaultQueue, 'current', { kind: 'default' })
     ///////////////////////////////
     // end: create default queue //
     ///////////////////////////////
@@ -525,11 +708,13 @@ export class Background {
 
       const formattedQueuename = nameToRedisQueueName(queueName, namedQueueConnection)
 
-      this.namedQueues[queueName] = new Background.Queue(formattedQueuename, {
+      const namedQueue = new Background.Queue(formattedQueuename, {
         ...defaultBullMQQueueOptions,
         ...namedQueueOptions,
         connection: namedQueueConnection,
       })
+      this.namedQueues[queueName] = namedQueue
+      this.registerJobSchedulerQueue(namedQueue, 'current', { kind: 'named', name: queueName })
 
       //////////////////////////
       // create extra workers //
@@ -678,18 +863,12 @@ export class Background {
   ) {
     this.connect()
 
-    // `jobId` is used to determine uniqueness along with name and repeat pattern.
-    // Since the name is really a job type and never changes, the `jobId` is the only
-    // way to allow multiple jobs with the same cron repeat pattern. Uniqueness will
-    // now be enforced by combining class name, method name, and cron repeat pattern.
-    //
-    // See: https://docs.bullmq.io/guide/jobs/repeatable
-    const schedulerId = `${globalName}:${method}`
+    const identity = this.jobSchedulerIdentity(globalName, method, jobConfig)
     const queueInstance = this.queueInstance(jobConfig)
     if (!queueInstance) throw new Error(`Missing queue for: ${jobConfig.queue?.toString()}`)
 
     await queueInstance.upsertJobScheduler(
-      schedulerId,
+      identity.jobSchedulerId,
       { pattern },
       {
         name: 'BackgroundJobQueueStaticJob',

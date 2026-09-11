@@ -22,10 +22,14 @@ describe('a scheduled service', () => {
 
     it('calls upsertJobScheduler with correct args', async () => {
       await subject()
-      const scheduledId = `${serviceClass.globalName}:classRunInBg`
+      const identity = background.jobSchedulerIdentity(
+        serviceClass.globalName,
+        'classRunInBg',
+        serviceClass.backgroundJobConfig,
+      )
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(background.queues[0]!.upsertJobScheduler).toHaveBeenCalledWith(
-        scheduledId,
+        identity.jobSchedulerId,
         { pattern: '* * * * *' },
         {
           name: 'BackgroundJobQueueStaticJob',

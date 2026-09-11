@@ -95,7 +95,11 @@ describe('Background#queueInstance routing in native BullMQ mode', () => {
       })
 
       expect(queueNamed('beta').jobSchedulers.length).toEqual(1)
-      expect(queueNamed('beta').jobSchedulers[0]![0]).toEqual('services/DummyService:classRunInBG')
+      expect(queueNamed('beta').jobSchedulers[0]![0]).toEqual(
+        backgroundInstance.jobSchedulerIdentity('services/DummyService', 'classRunInBG', {
+          queue: 'beta',
+        }).jobSchedulerId,
+      )
       expect(queueNamed('alpha').jobSchedulers.length).toEqual(0)
       expect(queueNamed(Background.defaultQueueName).jobSchedulers.length).toEqual(0)
     })
