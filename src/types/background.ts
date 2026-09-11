@@ -63,20 +63,70 @@ export type JobTypes =
 
 export type BackgroundQueuePriority = 'default' | 'urgent' | 'not_urgent' | 'last'
 
-export type PsychicJobSchedulerRoute = { kind: 'default' } | { kind: 'named'; name: string }
+/**
+ * The secret-free logical queue route stored in a Psychic job scheduler
+ * locator and reported by scheduler inventory.
+ */
+export type PsychicJobSchedulerRoute =
+  | {
+      /** Selects the application's configured default background queue. */
+      kind: 'default'
+    }
+  | {
+      /** Selects a configured named workstream or native BullMQ queue. */
+      kind: 'named'
+      /** The configured logical workstream or native queue name. */
+      name: string
+    }
 
+/**
+ * Identifies the exact configured queue origin where a scheduler was observed.
+ *
+ * Origins are suitable for immediate inventory-driven removal. They are not
+ * portable across application initialization generations; persist
+ * {@link PsychicJobScheduler.locator} instead.
+ */
 export interface PsychicJobSchedulerOrigin {
+  /**
+   * An opaque token binding this origin to the `Background` instance that
+   * produced it.
+   */
   generation: string
+
+  /** Whether the queue came from the current or transitional topology. */
   source: 'current' | 'transitional'
+
+  /** The secret-free logical route configured for the queue. */
   route: PsychicJobSchedulerRoute
 }
 
+/**
+ * Framework-owned metadata for a Psychic scheduled static job.
+ *
+ * Inventory rows omit serialized arguments, Redis connections, BullMQ queue
+ * objects, and BullMQ scheduler DTOs. The metadata is a point-in-time
+ * observation and may be stale by the time it is used.
+ */
 export interface PsychicJobScheduler {
+  /**
+   * The opaque, portable locator used for route-wide unscheduling. This is the
+   * value to persist when the concrete scheduled-service class may be removed.
+   */
   locator: string
+
+  /** The Psychic global name of the scheduled service. */
   globalName: string
+
+  /** The scheduled static method name. */
   method: string
+
+  /** The registered cron pattern. */
   pattern: string
+
+  /** The next scheduled occurrence as Unix epoch milliseconds, when known. */
   nextRunAt?: number
+
+  /** The exact configured queue origin where this scheduler was observed. */
   origin: PsychicJobSchedulerOrigin
 }
 

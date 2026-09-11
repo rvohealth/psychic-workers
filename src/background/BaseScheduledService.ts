@@ -80,8 +80,21 @@ export default class BaseScheduledService {
   }
 
   /**
-   * Returns the portable locator for an eligible scheduled method without
-   * constructing queues or contacting Redis.
+   * Creates an opaque, portable locator for a static job method owned by this
+   * scheduled service.
+   *
+   * Locator generation is deterministic and performs no queue construction or
+   * Redis I/O. The locator captures the service's current logical queue route,
+   * so callers can check the value into a seed and later pass it to
+   * {@link BaseScheduledService.unschedule} after deleting the concrete service.
+   * Treat the returned string as opaque; its encoding is not a public contract.
+   *
+   * @param methodName - A static job method declared by the concrete service.
+   * Inherited scheduler utilities are intentionally excluded.
+   * @returns A versioned Psychic locator for the service, method, and current
+   * logical queue route.
+   * @throws {@link GlobalNameNotSet} when the service has not been assigned its
+   * Psychic global name.
    */
   public static jobSchedulerLocator<
     T extends typeof BaseScheduledService,
@@ -91,8 +104,30 @@ export default class BaseScheduledService {
   }
 
   /**
-   * Removes the scheduler represented by a portable locator from every
-   * configured current and transitional origin for its logical route.
+   * Removes a scheduled registration identified by a portable Psychic locator.
+   *
+   * Every configured current and transitional queue origin for the locator's
+   * logical route is attempted. The operation returns `true` when at least one
+   * origin removed the scheduler and `false` when it was already absent from all
+   * matching origins. If an origin rejects, the method rejects after all origin
+   * attempts settle; another origin may already have removed its scheduler, so
+   * retrying the same locator is the recovery path.
+   *
+   * The logical route encoded in the locator must still be configured and its
+   * Redis connection reachable. Removing a scheduler prevents future
+   * occurrences, but does not cancel an occurrence that is already active.
+   * Scheduling the same service method again recreates the same identity.
+   * Caller-supplied Redis behavior still controls whether an unavailable client
+   * rejects or remains pending.
+   *
+   * @param locator - An opaque locator previously produced by
+   * {@link BaseScheduledService.jobSchedulerLocator}, or a checked-in copy of
+   * that string.
+   * @returns Whether any configured origin removed the scheduler.
+   * @throws {@link InvalidJobSchedulerLocator} when the locator is malformed or
+   * uses an unsupported version.
+   * @throws When the encoded logical route is not configured, or a matching
+   * queue client rejects the removal.
    */
   public static async unschedule(locator: string): Promise<boolean> {
     background.connect()

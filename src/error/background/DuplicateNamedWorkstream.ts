@@ -1,3 +1,7 @@
+/**
+ * Raised when a single current or transitional simple-mode configuration
+ * declares the same named workstream more than once.
+ */
 export default class DuplicateNamedWorkstream extends Error {
   constructor(
     private workstream: string,

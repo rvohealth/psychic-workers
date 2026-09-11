@@ -218,8 +218,19 @@ export class Background {
   }
 
   /**
-   * Returns an unordered, non-atomic aggregate of Psychic-owned job schedulers
-   * from every configured current and transitional queue origin.
+   * Lists Psychic-owned job schedulers from every configured current and
+   * transitional queue origin.
+   *
+   * The result is unordered. Each queue is read independently, so the aggregate
+   * is not a globally consistent snapshot and concurrent changes or aliased
+   * origins can produce mixed-time duplicates or omissions. BullMQ schedulers
+   * not recognizable as Psychic scheduled static jobs are excluded.
+   *
+   * @returns Framework-owned scheduler metadata without job arguments, Redis
+   * connections, BullMQ queue objects, or BullMQ scheduler DTOs.
+   * @throws When any configured queue client rejects its inventory read. No
+   * partial result is returned. Caller-supplied Redis behavior may instead keep
+   * an unavailable read pending.
    */
   public async getJobSchedulers(): Promise<PsychicJobScheduler[]> {
     this.connect()
@@ -238,8 +249,28 @@ export class Background {
   }
 
   /**
-   * Removes the scheduler represented by an inventory row from that row's
-   * exact configured queue origin.
+   * Removes the scheduler represented by an inventory row from that row's exact
+   * configured queue origin.
+   *
+   * Inventory origins are bound to the {@link Background} instance that created
+   * them. A cloned row from the same instance is valid, but a row from another
+   * initialization generation is rejected. The removal is keyed by scheduler
+   * identity, so stale cadence metadata remains removable. When two origins
+   * alias the same BullMQ keyspace, removal through one returns `true` and a
+   * later removal through the other observation returns `false`.
+   *
+   * Removing a scheduler prevents future occurrences but does not cancel an
+   * occurrence that is already active. Scheduling the same identity later
+   * recreates it.
+   *
+   * @param jobScheduler - A row returned by this instance's
+   * {@link Background.getJobSchedulers} method.
+   * @returns `true` when the scheduler was removed, or `false` when it was
+   * already absent at that origin.
+   * @throws When locator metadata contradicts the row, the origin belongs to a
+   * different initialization generation, the origin is no longer configured,
+   * or the queue client rejects. Caller-supplied Redis behavior may instead
+   * keep an unavailable removal pending.
    */
   public async removeJobScheduler(jobScheduler: PsychicJobScheduler): Promise<boolean> {
     this.connect()
