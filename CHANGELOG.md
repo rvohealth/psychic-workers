@@ -1,6 +1,7 @@
 ## 2.6.0
 
 - add `unschedule` and `unscheduleId` to `BaseScheduledService`. `unscheduleId` returns the id a method was scheduled under, e.g. `MyScheduledService.unscheduleId('myHourlyMethod')`, and `unschedule` removes the job registered under that id, e.g. `await MyScheduledService.unschedule(MyScheduledService.unscheduleId('myHourlyMethod'))`. Since the id is a plain string, it can be read in development and checked into a seed or migration, which allows a scheduled service class to be deleted in the same deploy that stops its job, e.g. `await ApplicationScheduledService.unschedule('services/MyScheduledService:myHourlyMethod')`. `unschedule` checks every queue, so it finds the job whether or not the service's workstream has changed since it was scheduled, and returns whether a job was actually removed. Unscheduling stops future runs; it does not cancel a run already placed on a queue.
+- maintenance: refresh the repository's development tooling to Vitest 4.1.11, and with it the patched `@vitest/mocker`, `js-yaml`, `fast-uri`, and `@humanfs/node` versions the lockfile resolves to. Consumer-installed dependency and peer-dependency declarations are unchanged; this does not remediate a consumer application's independently resolved `@rvoh/psychic`/`fast-uri` dependency graph.
 
 ## 2.5.0
 
