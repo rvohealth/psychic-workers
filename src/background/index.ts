@@ -258,9 +258,12 @@ export class Background {
    * alias the same BullMQ keyspace, removal through one returns `true` and a
    * later removal through the other observation returns `false`.
    *
-   * Removing a scheduler prevents BullMQ from emitting future occurrences. An
-   * occurrence BullMQ already emitted may still execute whether it is waiting,
-   * prioritized, or active. Scheduling the same identity later recreates it.
+   * Removing a scheduler deletes its pending delayed occurrence and prevents
+   * BullMQ from emitting later ones. It does not cancel an occurrence already
+   * released from that scheduler into queue-managed work; that occurrence may
+   * still execute regardless of its current BullMQ state, for example waiting,
+   * prioritized, paused, active, or awaiting retry. Scheduling the same
+   * identity later recreates it.
    *
    * @param jobScheduler - A row returned by this instance's
    * {@link Background.getJobSchedulers} method.
