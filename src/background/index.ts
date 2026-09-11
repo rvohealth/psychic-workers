@@ -5,6 +5,7 @@ import { PsychicApp } from '@rvoh/psychic'
 import { randomUUID } from 'node:crypto'
 import {
   Job,
+  JobSchedulerJson,
   JobSchedulerTemplateOptions,
   JobsOptions,
   Queue,
@@ -38,6 +39,7 @@ import {
   BackgroundJobData,
   BackgroundQueuePriority,
   JobTypes,
+  PsychicJobScheduler,
   PsychicJobSchedulerOrigin,
   PsychicJobSchedulerRoute,
   QueueBackgroundJobConfig,
@@ -216,6 +218,26 @@ export class Background {
   }
 
   /**
+   * Returns an unordered, non-atomic aggregate of Psychic-owned job schedulers
+   * from every configured current and transitional queue origin.
+   */
+  public async getJobSchedulers(): Promise<PsychicJobScheduler[]> {
+    this.connect()
+
+    const schedulerLists = await Promise.all(
+      this.jobSchedulerQueueTopology.map(async ({ queue, origin }) => {
+        const schedulers: JobSchedulerJson<unknown>[] = await queue.getJobSchedulers()
+        return schedulers.flatMap(scheduler => {
+          const psychicScheduler = this.psychicJobScheduler(scheduler, origin)
+          return psychicScheduler ? [psychicScheduler] : []
+        })
+      }),
+    )
+
+    return schedulerLists.flat()
+  }
+
+  /**
    * @internal
    *
    * Produces the shared queue-local identity and portable locator for a Psychic
@@ -310,6 +332,72 @@ export class Background {
 
   private jobSchedulerId(globalName: string, method: string) {
     return `${globalName}:${method}`
+  }
+
+  private psychicJobScheduler(
+    scheduler: JobSchedulerJson<unknown>,
+    origin: PsychicJobSchedulerOrigin,
+  ): PsychicJobScheduler | undefined {
+    const data = scheduler.template?.data
+    if (
+      scheduler.name !== 'BackgroundJobQueueStaticJob' ||
+      typeof scheduler.pattern !== 'string' ||
+      !this.isRecord(data) ||
+      typeof data.globalName !== 'string' ||
+      !data.globalName ||
+      typeof data.method !== 'string' ||
+      !data.method ||
+      !Array.isArray(data.args)
+    )
+      return
+
+    if (
+      scheduler.next !== undefined &&
+      scheduler.next !== null &&
+      (typeof scheduler.next !== 'number' || !Number.isFinite(scheduler.next))
+    )
+      return
+
+    const identity = this.jobSchedulerIdentity(
+      data.globalName,
+      data.method,
+      this.jobSchedulerRoutingConfig(origin.route),
+    )
+    if (scheduler.key !== identity.jobSchedulerId) return
+
+    return {
+      locator: identity.locator,
+      globalName: identity.globalName,
+      method: identity.method,
+      pattern: scheduler.pattern,
+      ...(typeof scheduler.next === 'number' ? { nextRunAt: scheduler.next } : {}),
+      origin: this.copyJobSchedulerOrigin(origin),
+    }
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+  }
+
+  private jobSchedulerRoutingConfig(route: PsychicJobSchedulerRoute): JobSchedulerRoutingConfig {
+    switch (route.kind) {
+      case 'default':
+        return {}
+      case 'named':
+        return { workstream: route.name }
+      default: {
+        const _never: never = route
+        throw new Error(`Unhandled PsychicJobSchedulerRoute: ${String(_never)}`)
+      }
+    }
+  }
+
+  private copyJobSchedulerOrigin(origin: PsychicJobSchedulerOrigin): PsychicJobSchedulerOrigin {
+    return {
+      generation: origin.generation,
+      source: origin.source,
+      route: { ...origin.route },
+    }
   }
 
   private jobSchedulerRoute(jobConfig: JobSchedulerRoutingConfig): PsychicJobSchedulerRoute {

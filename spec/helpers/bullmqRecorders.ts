@@ -1,4 +1,4 @@
-import { Queue, Worker } from 'bullmq'
+import { JobSchedulerJson, Queue, Worker } from 'bullmq'
 import { Redis } from 'ioredis'
 import { Background } from '../../src/package-exports/index.js'
 import { BullMQNativeWorkerOptions } from '../../src/package-exports/types.js'
@@ -28,6 +28,8 @@ export interface RecordingQueue {
   queueOptions: Record<string, unknown>
   adds: RecordedJobAdd[]
   jobSchedulers: unknown[][]
+  returnedJobSchedulers: JobSchedulerJson<unknown>[]
+  jobSchedulerReads: number
   removedJobSchedulerIds: string[]
 
   /**
@@ -42,6 +44,7 @@ export interface RecordingQueue {
   add(jobType: string, jobData: unknown, opts: Record<string, unknown>): Promise<null>
   toKey(type: string): string
   upsertJobScheduler(...args: unknown[]): Promise<null>
+  getJobSchedulers(): Promise<JobSchedulerJson<unknown>[]>
   removeJobScheduler(jobSchedulerId: string): Promise<boolean>
   close(): null
 }
@@ -94,6 +97,8 @@ export function installBullMQRecorders(): BullMQRecorders {
   class QueueRecorder implements RecordingQueue {
     public adds: RecordedJobAdd[] = []
     public jobSchedulers: unknown[][] = []
+    public returnedJobSchedulers: JobSchedulerJson<unknown>[] = []
+    public jobSchedulerReads = 0
     public removedJobSchedulerIds: string[] = []
     public keys: Record<string, string> = {}
 
@@ -116,6 +121,11 @@ export function installBullMQRecorders(): BullMQRecorders {
     public upsertJobScheduler(...args: unknown[]) {
       this.jobSchedulers.push(args)
       return Promise.resolve(null)
+    }
+
+    public getJobSchedulers() {
+      this.jobSchedulerReads++
+      return Promise.resolve(this.returnedJobSchedulers)
     }
 
     public removeJobScheduler(jobSchedulerId: string) {
