@@ -41,6 +41,12 @@ export interface RecordingQueue {
   add(jobType: string, jobData: unknown, opts: Record<string, unknown>): Promise<null>
   toKey(type: string): string
   upsertJobScheduler(...args: unknown[]): Promise<null>
+
+  /**
+   * mirrors BullMQ's contract of resolving true only when this queue actually
+   * held the scheduler, so specs can assert which queue a removal landed in
+   */
+  removeJobScheduler(jobSchedulerId: string): Promise<boolean>
   close(): null
 }
 
@@ -113,6 +119,14 @@ export function installBullMQRecorders(): BullMQRecorders {
     public upsertJobScheduler(...args: unknown[]) {
       this.jobSchedulers.push(args)
       return Promise.resolve(null)
+    }
+
+    public removeJobScheduler(jobSchedulerId: string) {
+      const index = this.jobSchedulers.findIndex(([id]) => id === jobSchedulerId)
+      if (index === -1) return Promise.resolve(false)
+
+      this.jobSchedulers.splice(index, 1)
+      return Promise.resolve(true)
     }
 
     public close() {

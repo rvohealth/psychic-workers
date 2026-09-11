@@ -678,13 +678,7 @@ export class Background {
   ) {
     this.connect()
 
-    // `jobId` is used to determine uniqueness along with name and repeat pattern.
-    // Since the name is really a job type and never changes, the `jobId` is the only
-    // way to allow multiple jobs with the same cron repeat pattern. Uniqueness will
-    // now be enforced by combining class name, method name, and cron repeat pattern.
-    //
-    // See: https://docs.bullmq.io/guide/jobs/repeatable
-    const schedulerId = `${globalName}:${method}`
+    const schedulerId = this.jobSchedulerId(globalName, method)
     const queueInstance = this.queueInstance(jobConfig)
     if (!queueInstance) throw new Error(`Missing queue for: ${jobConfig.queue?.toString()}`)
 
@@ -702,6 +696,44 @@ export class Background {
         },
       },
     )
+  }
+
+  /**
+   * @internal
+   *
+   * Returns the id a scheduled job is registered with BullMQ under.
+   *
+   * `jobId` is used to determine uniqueness along with name and repeat pattern.
+   * Since the name is really a job type and never changes, the `jobId` is the only
+   * way to allow multiple jobs with the same cron repeat pattern. Uniqueness is
+   * enforced by combining the global name and the method name.
+   *
+   * See: https://docs.bullmq.io/guide/jobs/repeatable
+   *
+   * @param globalName - the globalName of the class the method belongs to
+   * @param method - the name of the scheduled method
+   */
+  public jobSchedulerId(globalName: string, method: string) {
+    return `${globalName}:${method}`
+  }
+
+  /**
+   * removes a scheduled job from BullMQ, preventing it from being run again
+   *
+   * Every queue is checked, rather than the one the job's current
+   * `backgroundJobConfig` routes to, so that a job can still be unscheduled
+   * after its workstream has changed, or after the class that scheduled it has
+   * been deleted.
+   *
+   * @param jobSchedulerId - the id the job was scheduled under
+   * @returns true if a scheduled job was removed, false if none was found
+   */
+  public async unschedule(jobSchedulerId: string): Promise<boolean> {
+    this.connect()
+
+    const removed = await Promise.all(this.queues.map(queue => queue.removeJobScheduler(jobSchedulerId)))
+
+    return removed.some(Boolean)
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

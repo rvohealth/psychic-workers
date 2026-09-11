@@ -80,6 +80,70 @@ export default class BaseScheduledService {
   }
 
   /**
+   * Returns the id that `schedule` registers a job under, which can be passed
+   * to {@link BaseScheduledService.unschedule} to remove that job.
+   *
+   * The id is derived from the service's global name and the method name. It
+   * performs no queue construction and no redis I/O, so it is safe to call
+   * anywhere, including from a console in development.
+   *
+   * The intended workflow for deleting a scheduled service is to read the id
+   * off the class before removing it:
+   *
+   * ```ts
+   * MyScheduledService.unscheduleId('myHourlyMethod')
+   * // => 'services/MyScheduledService:myHourlyMethod'
+   * ```
+   *
+   * then check that string into a seed or migration and call `unschedule` with
+   * it, which allows the class itself to be deleted in the same deploy.
+   *
+   * ```ts
+   * await ApplicationScheduledService.unschedule('services/MyScheduledService:myHourlyMethod')
+   * ```
+   *
+   * @param methodName - the name of the static method that was scheduled
+   * @returns the id `schedule` registered this method under
+   */
+  public static unscheduleId<T, MethodName extends FunctionPropertyNames<Required<T>>>(
+    this: T,
+    methodName: MethodName,
+  ): string {
+    const safeThis: typeof BaseScheduledService = this as typeof BaseScheduledService
+
+    return background.jobSchedulerId(safeThis.globalName, methodName)
+  }
+
+  /**
+   * Removes a scheduled job, preventing it from being run again.
+   *
+   * ```ts
+   * await MyScheduledService.unschedule(MyScheduledService.unscheduleId('myHourlyMethod'))
+   * ```
+   *
+   * Since the id is just a string, it can also be checked into a seed or
+   * migration, which allows the scheduled service class to be deleted in the
+   * same deploy that stops its job:
+   *
+   * ```ts
+   * await ApplicationScheduledService.unschedule('services/MyScheduledService:myHourlyMethod')
+   * ```
+   *
+   * Every queue in your application is checked, so this finds the job whether
+   * or not the service's workstream has changed since it was scheduled, and
+   * whether it landed in a current or a transitional queue.
+   *
+   * NOTE: unscheduling stops future runs. It does not cancel a run that has
+   * already been placed on a queue, so a final invocation may still happen.
+   *
+   * @param id - the id the job was scheduled under, from {@link BaseScheduledService.unscheduleId}
+   * @returns true if a scheduled job was removed, false if none was found
+   */
+  public static async unschedule(id: string): Promise<boolean> {
+    return await background.unschedule(id)
+  }
+
+  /**
    * types composed by psychic must be provided, since psychic-workers leverages
    * the sync command in psychic to read your backgroundable services and extract
    * metadata, which can be used to help provide types for the underlying methods
