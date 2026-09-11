@@ -113,6 +113,58 @@ describe('public job scheduler operations against Redis', () => {
     ).toBe(false)
   })
 
+  it('leaves an already-emitted waiting occurrence runnable while removing future scheduling', async () => {
+    const queue = background.queues[0]!
+    await DefaultDummyScheduledService.schedule('* * * * * *', 'classRunInBg', 'waiting')
+    const delayedJob = (await queue.getDelayed()).find(job =>
+      jobHasGlobalName(job, DefaultDummyScheduledService.globalName),
+    )!
+    await delayedJob.promote()
+    expect(await delayedJob.getState()).toBe('waiting')
+
+    await expect(DefaultDummyScheduledService.unschedule(LEGACY_LOCATOR)).resolves.toBe(true)
+    expect((await queue.getJobSchedulers()).some(scheduler => scheduler.key === LEGACY_SCHEDULER_ID)).toBe(
+      false,
+    )
+    expect((await queue.getWaiting()).some(job => job.id === delayedJob.id)).toBe(true)
+
+    const workerConnection = new Redis({
+      ...(process.env.REDIS_USER ? { username: process.env.REDIS_USER } : {}),
+      ...(process.env.REDIS_PASSWORD ? { password: process.env.REDIS_PASSWORD } : {}),
+      host: process.env.REDIS_HOST || 'localhost',
+      port: process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : 6379,
+      maxRetriesPerRequest: null,
+    })
+    const worker = new Worker(
+      queue.name,
+      async () => {
+        await Promise.resolve()
+      },
+      {
+        autorun: false,
+        connection: workerConnection,
+      },
+    )
+    const token = 'job-scheduler-waiting-contract'
+
+    try {
+      const runnableJob = await worker.getNextJob(token, { block: false })
+      if (!runnableJob) throw new Error('Expected the emitted scheduler occurrence to remain runnable')
+      expect(runnableJob.id).toBe(delayedJob.id)
+      expect(await runnableJob.getState()).toBe('active')
+
+      await runnableJob.moveToCompleted(undefined, token, false)
+      expect(
+        (await queue.getDelayed()).some(job =>
+          jobHasGlobalName(job, DefaultDummyScheduledService.globalName),
+        ),
+      ).toBe(false)
+    } finally {
+      await worker.close()
+      workerConnection.disconnect()
+    }
+  })
+
   it('removes the scheduler without cancelling its already-active occurrence', async () => {
     const queue = background.queues[0]!
     await DefaultDummyScheduledService.schedule('* * * * * *', 'classRunInBg', 'active')

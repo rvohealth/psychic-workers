@@ -176,6 +176,22 @@ describe('Background#getJobSchedulers', () => {
     ])
   })
 
+  it('filters an undefined upstream observation beside a valid scheduler', async () => {
+    const background = freshBackground({
+      defaultQueueConnection: currentConnection,
+      defaultWorkerConnection: undefined,
+    })
+    background.connect()
+    bullmq.queues[0]!.returnedJobSchedulers = [
+      undefined as unknown as JobSchedulerJson<unknown>,
+      scheduler('services/Valid', 'run', '* * * * *'),
+    ]
+
+    await expect(background.getJobSchedulers()).resolves.toEqual([
+      expect.objectContaining({ globalName: 'services/Valid', method: 'run' }),
+    ])
+  })
+
   it('returns separate observations when configured origins alias shared scheduler state', async () => {
     const background = freshBackground({
       defaultQueueConnection: currentConnection,

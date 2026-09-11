@@ -5,7 +5,6 @@ import { PsychicApp } from '@rvoh/psychic'
 import { randomUUID } from 'node:crypto'
 import {
   Job,
-  JobSchedulerJson,
   JobSchedulerTemplateOptions,
   JobsOptions,
   Queue,
@@ -237,7 +236,7 @@ export class Background {
 
     const schedulerLists = await Promise.all(
       this.jobSchedulerQueueTopology.map(async ({ queue, origin }) => {
-        const schedulers: JobSchedulerJson<unknown>[] = await queue.getJobSchedulers()
+        const schedulers: unknown[] = await queue.getJobSchedulers()
         return schedulers.flatMap(scheduler => {
           const psychicScheduler = this.psychicJobScheduler(scheduler, origin)
           return psychicScheduler ? [psychicScheduler] : []
@@ -259,9 +258,9 @@ export class Background {
    * alias the same BullMQ keyspace, removal through one returns `true` and a
    * later removal through the other observation returns `false`.
    *
-   * Removing a scheduler prevents future occurrences but does not cancel an
-   * occurrence that is already active. Scheduling the same identity later
-   * recreates it.
+   * Removing a scheduler prevents BullMQ from emitting future occurrences. An
+   * occurrence BullMQ already emitted may still execute whether it is waiting,
+   * prioritized, or active. Scheduling the same identity later recreates it.
    *
    * @param jobScheduler - A row returned by this instance's
    * {@link Background.getJobSchedulers} method.
@@ -395,10 +394,12 @@ export class Background {
   }
 
   private psychicJobScheduler(
-    scheduler: JobSchedulerJson<unknown>,
+    scheduler: unknown,
     origin: PsychicJobSchedulerOrigin,
   ): PsychicJobScheduler | undefined {
-    const data = scheduler.template?.data
+    if (!this.isRecord(scheduler)) return
+
+    const data = this.isRecord(scheduler.template) ? scheduler.template.data : undefined
     if (
       scheduler.name !== 'BackgroundJobQueueStaticJob' ||
       typeof scheduler.pattern !== 'string' ||

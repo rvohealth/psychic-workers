@@ -114,11 +114,12 @@ export default class BaseScheduledService {
    * retrying the same locator is the recovery path.
    *
    * The logical route encoded in the locator must still be configured and its
-   * Redis connection reachable. Removing a scheduler prevents future
-   * occurrences, but does not cancel an occurrence that is already active.
-   * Scheduling the same service method again recreates the same identity.
-   * Caller-supplied Redis behavior still controls whether an unavailable client
-   * rejects or remains pending.
+   * Redis connection reachable. Removing a scheduler prevents BullMQ from
+   * emitting future occurrences. An occurrence BullMQ already emitted may still
+   * execute whether it is waiting, prioritized, or active. Scheduling the same
+   * service method again recreates the same identity. Caller-supplied Redis
+   * behavior still controls whether an unavailable client rejects or remains
+   * pending.
    *
    * @param locator - An opaque locator previously produced by
    * {@link BaseScheduledService.jobSchedulerLocator}, or a checked-in copy of

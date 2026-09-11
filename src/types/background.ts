@@ -105,7 +105,9 @@ export interface PsychicJobSchedulerOrigin {
  *
  * Inventory rows omit serialized arguments, Redis connections, BullMQ queue
  * objects, and BullMQ scheduler DTOs. The metadata is a point-in-time
- * observation and may be stale by the time it is used.
+ * observation and may be stale by the time it is used. Removing the represented
+ * scheduler prevents BullMQ from emitting future occurrences, but an occurrence
+ * already emitted into waiting, prioritized, or active work may still execute.
  */
 export interface PsychicJobScheduler {
   /**
