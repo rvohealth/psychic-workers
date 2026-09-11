@@ -1,8 +1,32 @@
 import { Job } from 'bullmq'
+import BaseScheduledService from '../../../src/background/BaseScheduledService.js'
 import { background } from '../../../src/package-exports/index.js'
 import DefaultDummyScheduledService from '../../../test-app/src/app/services/DefaultDummyScheduledService.js'
 
 describe('a scheduled service', () => {
+  it('derives a local locator for an eligible child method', () => {
+    const serviceClass = DefaultDummyScheduledService
+
+    const locator = serviceClass.jobSchedulerLocator('classRunInBg')
+
+    expect(background.jobSchedulerIdentityFromLocator(locator)).toMatchObject({
+      globalName: serviceClass.globalName,
+      method: 'classRunInBg',
+      route: { kind: 'default' },
+    })
+  })
+
+  it('lets a base-class-only seed delegate a hard-coded locator to Background', async () => {
+    const locator = 'psychic-job-scheduler:v1:WyJzZXJ2aWNlcy9EaWdlc3RzIiwiZGVsaXZlciIsWyJkZWZhdWx0Il1d'
+    const connect = vi.spyOn(background, 'connect')
+    const unscheduleByLocator = vi.spyOn(background, 'unscheduleByLocator').mockResolvedValue(true)
+
+    await expect(BaseScheduledService.unschedule(locator)).resolves.toBe(true)
+
+    expect(connect).toHaveBeenCalled()
+    expect(unscheduleByLocator).toHaveBeenCalledWith(locator)
+  })
+
   context('queue priority', () => {
     const serviceClass = DefaultDummyScheduledService
     const subject = async () => {

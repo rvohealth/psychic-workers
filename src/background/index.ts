@@ -160,6 +160,9 @@ export class Background {
    */
   private readonly jobSchedulerTopologyGeneration = randomUUID()
 
+  /** @internal */
+  private jobSchedulerRoutingMode: 'simple' | 'native' | undefined
+
   /**
    * @internal
    *
@@ -191,12 +194,14 @@ export class Background {
     const defaultBullMQQueueOptions = backgroundOptions.defaultBullMQQueueOptions || {}
 
     if ((backgroundOptions as PsychicBackgroundNativeBullMQOptions).nativeBullMQ) {
+      this.jobSchedulerRoutingMode = 'native'
       this.nativeBullMQConnect(
         defaultBullMQQueueOptions,
         backgroundOptions as PsychicBackgroundNativeBullMQOptions,
         { activateWorkers },
       )
     } else {
+      this.jobSchedulerRoutingMode = 'simple'
       this.simpleConnect(defaultBullMQQueueOptions, backgroundOptions as PsychicBackgroundSimpleOptions, {
         activateWorkers,
       })
@@ -276,6 +281,33 @@ export class Background {
     }
   }
 
+  /**
+   * @internal
+   *
+   * Removes the scheduler identified by a portable Psychic locator from every
+   * configured queue origin for its logical route.
+   */
+  public async unscheduleByLocator(locator: string): Promise<boolean> {
+    this.connect()
+
+    const identity = this.jobSchedulerIdentityFromLocator(locator)
+    const matchingQueues = this.jobSchedulerQueueTopology.filter(({ origin }) =>
+      this.jobSchedulerRoutesMatch(origin.route, identity.route),
+    )
+
+    if (matchingQueues.length === 0) throw this.missingQueueForJobSchedulerRoute(identity.route)
+
+    const removalResults = await Promise.allSettled(
+      matchingQueues.map(async ({ queue }) => await queue.removeJobScheduler(identity.jobSchedulerId)),
+    )
+    const rejectedRemoval = removalResults.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    )
+    if (rejectedRemoval) throw rejectedRemoval.reason
+
+    return removalResults.some(result => result.status === 'fulfilled' && result.value)
+  }
+
   private jobSchedulerId(globalName: string, method: string) {
     return `${globalName}:${method}`
   }
@@ -284,6 +316,35 @@ export class Background {
     if (typeof jobConfig.workstream === 'string') return { kind: 'named', name: jobConfig.workstream }
     if (typeof jobConfig.queue === 'string') return { kind: 'named', name: jobConfig.queue }
     return { kind: 'default' }
+  }
+
+  private jobSchedulerRoutesMatch(left: PsychicJobSchedulerRoute, right: PsychicJobSchedulerRoute): boolean {
+    switch (left.kind) {
+      case 'default':
+        return right.kind === 'default'
+      case 'named':
+        return right.kind === 'named' && left.name === right.name
+      default: {
+        const _never: never = left
+        throw new Error(`Unhandled PsychicJobSchedulerRoute: ${String(_never)}`)
+      }
+    }
+  }
+
+  private missingQueueForJobSchedulerRoute(route: PsychicJobSchedulerRoute): Error {
+    switch (route.kind) {
+      case 'default':
+        return new Error('No default queue is configured for this job scheduler')
+      case 'named': {
+        return this.jobSchedulerRoutingMode === 'native'
+          ? new NoQueueForSpecifiedQueueName(route.name)
+          : new NoQueueForSpecifiedWorkstream(route.name)
+      }
+      default: {
+        const _never: never = route
+        throw new Error(`Unhandled PsychicJobSchedulerRoute: ${String(_never)}`)
+      }
+    }
   }
 
   private encodeJobSchedulerLocator(globalName: string, method: string, route: PsychicJobSchedulerRoute) {

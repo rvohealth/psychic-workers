@@ -28,6 +28,7 @@ export interface RecordingQueue {
   queueOptions: Record<string, unknown>
   adds: RecordedJobAdd[]
   jobSchedulers: unknown[][]
+  removedJobSchedulerIds: string[]
 
   /**
    * BullMQ's `Job` constructor binds `toKey` off the queue it is handed and
@@ -41,6 +42,7 @@ export interface RecordingQueue {
   add(jobType: string, jobData: unknown, opts: Record<string, unknown>): Promise<null>
   toKey(type: string): string
   upsertJobScheduler(...args: unknown[]): Promise<null>
+  removeJobScheduler(jobSchedulerId: string): Promise<boolean>
   close(): null
 }
 
@@ -92,6 +94,7 @@ export function installBullMQRecorders(): BullMQRecorders {
   class QueueRecorder implements RecordingQueue {
     public adds: RecordedJobAdd[] = []
     public jobSchedulers: unknown[][] = []
+    public removedJobSchedulerIds: string[] = []
     public keys: Record<string, string> = {}
 
     constructor(
@@ -113,6 +116,11 @@ export function installBullMQRecorders(): BullMQRecorders {
     public upsertJobScheduler(...args: unknown[]) {
       this.jobSchedulers.push(args)
       return Promise.resolve(null)
+    }
+
+    public removeJobScheduler(jobSchedulerId: string) {
+      this.removedJobSchedulerIds.push(jobSchedulerId)
+      return Promise.resolve(false)
     }
 
     public close() {

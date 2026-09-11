@@ -80,6 +80,26 @@ export default class BaseScheduledService {
   }
 
   /**
+   * Returns the portable locator for an eligible scheduled method without
+   * constructing queues or contacting Redis.
+   */
+  public static jobSchedulerLocator<
+    T extends typeof BaseScheduledService,
+    MethodName extends PsychicScheduledServiceStaticMethods<T & typeof BaseScheduledService>,
+  >(this: T, methodName: MethodName): string {
+    return background.jobSchedulerIdentity(this.globalName, methodName, this.backgroundJobConfig).locator
+  }
+
+  /**
+   * Removes the scheduler represented by a portable locator from every
+   * configured current and transitional origin for its logical route.
+   */
+  public static async unschedule(locator: string): Promise<boolean> {
+    background.connect()
+    return await background.unscheduleByLocator(locator)
+  }
+
+  /**
    * types composed by psychic must be provided, since psychic-workers leverages
    * the sync command in psychic to read your backgroundable services and extract
    * metadata, which can be used to help provide types for the underlying methods
