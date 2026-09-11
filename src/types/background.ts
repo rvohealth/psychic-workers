@@ -63,6 +63,23 @@ export type JobTypes =
 
 export type BackgroundQueuePriority = 'default' | 'urgent' | 'not_urgent' | 'last'
 
+export type PsychicJobSchedulerRoute = { kind: 'default' } | { kind: 'named'; name: string }
+
+export interface PsychicJobSchedulerOrigin {
+  generation: string
+  source: 'current' | 'transitional'
+  route: PsychicJobSchedulerRoute
+}
+
+export interface PsychicJobScheduler {
+  locator: string
+  globalName: string
+  method: string
+  pattern: string
+  nextRunAt?: number
+  origin: PsychicJobSchedulerOrigin
+}
+
 export interface BackgroundWithOpts {
   /**
    * an optional delay to hold off the job for a certain amount of

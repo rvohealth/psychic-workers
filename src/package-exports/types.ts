@@ -7,4 +7,10 @@ export {
   type RedisOrRedisClusterConnection,
   type TransitionalPsychicBackgroundSimpleOptions,
 } from '../psychic-app-workers/index.js'
-export { type BackgroundJobConfig, type BackgroundQueuePriority } from '../types/background.js'
+export {
+  type BackgroundJobConfig,
+  type BackgroundQueuePriority,
+  type PsychicJobScheduler,
+  type PsychicJobSchedulerOrigin,
+  type PsychicJobSchedulerRoute,
+} from '../types/background.js'
