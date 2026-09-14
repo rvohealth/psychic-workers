@@ -1,5 +1,7 @@
 import { Job } from 'bullmq'
 import parallelTestSafeQueueName from '../../../../src/background/helpers/parallelTestSafeQueueName.js'
+import RateLimitedPsychicJobThrownFromWorkerWithoutLimiter from '../../../../src/error/background/RateLimitedPsychicJobThrownFromWorkerWithoutLimiter.js'
+import { RateLimitedPsychicJob } from '../../../../src/package-exports/errors.js'
 import PsychicAppWorkers, {
   PsychicWorkersAppTestInvocationType,
 } from '../../../../src/psychic-app-workers/index.js'
@@ -102,6 +104,32 @@ describe('.work', () => {
         await WorkerTestUtils.workScheduled({ for: DummyScheduledService })
         expect(scheduledSpy).toHaveBeenCalledWith('message 1', expect.any(Job))
       })
+    })
+  })
+
+  context('when a delayed job throws RateLimitedPsychicJob', () => {
+    it('propagates it untranslated from a named workstream whose workers carry a limiter (snazzy sets rateLimit)', async () => {
+      vi.spyOn(LastDummyServiceInNamedWorkstream, 'classRunInBG').mockRejectedValue(
+        new RateLimitedPsychicJob({ pauseQueueForSeconds: 5 }),
+      )
+      await LastDummyServiceInNamedWorkstream.backgroundWith(
+        { delay: { minutes: 10 } },
+        'classRunInBG',
+        'message 1',
+      )
+
+      await expect(WorkerTestUtils.workScheduled()).rejects.toThrow(RateLimitedPsychicJob)
+    })
+
+    it('raises the misconfiguration error from the default workstream, whose workers carry no limiter', async () => {
+      vi.spyOn(DummyService, 'classRunInBG').mockRejectedValue(
+        new RateLimitedPsychicJob({ pauseQueueForSeconds: 5 }),
+      )
+      await DummyService.backgroundWith({ delay: { minutes: 10 } }, 'classRunInBG', 'message 1')
+
+      await expect(WorkerTestUtils.workScheduled()).rejects.toThrow(
+        RateLimitedPsychicJobThrownFromWorkerWithoutLimiter,
+      )
     })
   })
 })

@@ -73,12 +73,23 @@ export default class BaseBackgroundedModel extends Dream {
    * can be used to hold off the job for a certain amount of time after
    * it is entered into the queue.
    *
+   * The delay object also accepts an optional `jobId`, which turns the delay
+   * into a **debounce**: repeated calls carrying the same `jobId` collapse into
+   * a single execution, which runs once the delay has elapsed without another
+   * call arriving — that is, after the last call. `jobId` is a deduplication
+   * key rather than a BullMQ job id, so `queue.getJob(jobId)` will not resolve
+   * the debounced job, and a delay carrying a `jobId` must be at least ten
+   * seconds or it is refused. See `DelayedJobOpts` for the premise that
+   * guarantee rests on and the cases that fall outside it.
+   *
    * ```ts
    * await User.backgroundWithDelay('myMethod', 'abc', 123)
    * ```
    * though calling background must be awaited, the resolution of the promise
-   * is an indication that the job was put in the queue, not that it has
-   * completed.
+   * is an indication that a run is pending, not that it has completed. Where a
+   * `jobId` is in play that is all it means: this call either slid the pending
+   * job's timer or started a new one, and it may have been collapsed into a job
+   * some earlier call enqueued.
    *
    * NOTE: in test environments, psychic will immediately invoke the underlying
    * method, preventing you from needing to explicitly wait for queues to flush
@@ -86,7 +97,7 @@ export default class BaseBackgroundedModel extends Dream {
    *
    * @deprecated use `backgroundWith({ delay }, methodName, ...args)` instead. This method will be removed in a future major version.
    *
-   * @param delaySeconds - the amount of time (in seconds) you want to hold off before allowing the job to run
+   * @param delaySeconds - the amount of time you want to hold off before allowing the job to run, plus an optional `jobId` (a deduplication key, requiring at least ten seconds of delay) which debounces repeated calls into a single run
    * @param methodName - the name of the static method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
    */
@@ -113,19 +124,30 @@ export default class BaseBackgroundedModel extends Dream {
    * be used to delay the job and/or override the priority provided by
    * the `backgroundJobConfig` getter on this model.
    *
+   * Adding a `jobId` to the delay turns it into a **debounce**: repeated calls
+   * carrying the same `jobId` collapse into a single execution, which runs once
+   * the delay has elapsed without another call arriving — that is, after the
+   * last call. `jobId` is a deduplication key rather than a BullMQ job id, so
+   * `queue.getJob(jobId)` will not resolve the debounced job, and a delay
+   * carrying a `jobId` must be at least ten seconds or it is refused. See
+   * `DelayedJobOpts` for the premise that guarantee rests on and the cases that
+   * fall outside it.
+   *
    * ```ts
    * await User.backgroundWith({ delay: { seconds: 30, jobId: 'my-unique-job-id' }, priority: 'urgent' }, 'myMethod', 'abc', 123)
    * ```
    * though calling backgroundWith must be awaited, the resolution of the promise
-   * is an indication that the job was put in the queue, not that it has
-   * completed.
+   * is an indication that a run is pending, not that it has completed. Where a
+   * `jobId` is in play that is all it means: this call either slid the pending
+   * job's timer or started a new one, and it may have been collapsed into a job
+   * some earlier call enqueued.
    *
    * NOTE: in test environments, psychic will immediately invoke the underlying
    * method, preventing you from needing to explicitly wait for queues to flush
    * before making assertions.
    *
    * @param opts - options for backgrounding this job
-   * @param opts.delay - (optional) the amount of time you want to hold off before allowing the job to run, and an optional `jobId` which debounces repeated calls within the delay window
+   * @param opts.delay - (optional) the amount of time you want to hold off before allowing the job to run, plus an optional `jobId` (a deduplication key, requiring at least ten seconds of delay) which debounces repeated calls into a single run
    * @param opts.priority - (optional) a priority which, when provided, overrides the priority provided by `backgroundJobConfig`
    * @param methodName - the name of the static method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
@@ -198,13 +220,24 @@ export default class BaseBackgroundedModel extends Dream {
    * can be used to hold off the job for a certain amount of time after
    * it is entered into the queue.
    *
+   * The delay object also accepts an optional `jobId`, which turns the delay
+   * into a **debounce**: repeated calls carrying the same `jobId` collapse into
+   * a single execution, which runs once the delay has elapsed without another
+   * call arriving — that is, after the last call. `jobId` is a deduplication
+   * key rather than a BullMQ job id, so `queue.getJob(jobId)` will not resolve
+   * the debounced job, and a delay carrying a `jobId` must be at least ten
+   * seconds or it is refused. See `DelayedJobOpts` for the premise that
+   * guarantee rests on and the cases that fall outside it.
+   *
    * ```ts
    * const user = await User.lastOrFail()
    * await user.backgroundWithDelay('myMethod', 'abc', 123)
    * ```
    * though calling background must be awaited, the resolution of the promise
-   * is an indication that the job was put in the queue, not that it has
-   * completed.
+   * is an indication that a run is pending, not that it has completed. Where a
+   * `jobId` is in play that is all it means: this call either slid the pending
+   * job's timer or started a new one, and it may have been collapsed into a job
+   * some earlier call enqueued.
    *
    * NOTE: in test environments, psychic will immediately invoke the underlying
    * method, preventing you from needing to explicitly wait for queues to flush
@@ -212,7 +245,7 @@ export default class BaseBackgroundedModel extends Dream {
    *
    * @deprecated use `backgroundWith({ delay }, methodName, ...args)` instead. This method will be removed in a future major version.
    *
-   * @param delaySeconds - the amount of time (in seconds) you want to hold off before allowing the job to run
+   * @param delaySeconds - the amount of time you want to hold off before allowing the job to run, plus an optional `jobId` (a deduplication key, requiring at least ten seconds of delay) which debounces repeated calls into a single run
    * @param methodName - the name of the static method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
    */
@@ -238,20 +271,31 @@ export default class BaseBackgroundedModel extends Dream {
    * be used to delay the job and/or override the priority provided by
    * the `backgroundJobConfig` getter on this model.
    *
+   * Adding a `jobId` to the delay turns it into a **debounce**: repeated calls
+   * carrying the same `jobId` collapse into a single execution, which runs once
+   * the delay has elapsed without another call arriving — that is, after the
+   * last call. `jobId` is a deduplication key rather than a BullMQ job id, so
+   * `queue.getJob(jobId)` will not resolve the debounced job, and a delay
+   * carrying a `jobId` must be at least ten seconds or it is refused. See
+   * `DelayedJobOpts` for the premise that guarantee rests on and the cases that
+   * fall outside it.
+   *
    * ```ts
    * const user = await User.lastOrFail()
    * await user.backgroundWith({ delay: { seconds: 30, jobId: 'my-unique-job-id' }, priority: 'urgent' }, 'myMethod', 'abc', 123)
    * ```
    * though calling backgroundWith must be awaited, the resolution of the promise
-   * is an indication that the job was put in the queue, not that it has
-   * completed.
+   * is an indication that a run is pending, not that it has completed. Where a
+   * `jobId` is in play that is all it means: this call either slid the pending
+   * job's timer or started a new one, and it may have been collapsed into a job
+   * some earlier call enqueued.
    *
    * NOTE: in test environments, psychic will immediately invoke the underlying
    * method, preventing you from needing to explicitly wait for queues to flush
    * before making assertions.
    *
    * @param opts - options for backgrounding this job
-   * @param opts.delay - (optional) the amount of time you want to hold off before allowing the job to run, and an optional `jobId` which debounces repeated calls within the delay window
+   * @param opts.delay - (optional) the amount of time you want to hold off before allowing the job to run, plus an optional `jobId` (a deduplication key, requiring at least ten seconds of delay) which debounces repeated calls into a single run
    * @param opts.priority - (optional) a priority which, when provided, overrides the priority provided by `backgroundJobConfig`
    * @param methodName - the name of the instance method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method

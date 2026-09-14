@@ -1,4 +1,8 @@
-import { Job } from 'bullmq'
+import { Job, Queue } from 'bullmq'
+import background from '../../../../src/background/index.js'
+import parallelTestSafeQueueName from '../../../../src/background/helpers/parallelTestSafeQueueName.js'
+import RateLimitedPsychicJobThrownFromWorkerWithoutLimiter from '../../../../src/error/background/RateLimitedPsychicJobThrownFromWorkerWithoutLimiter.js'
+import { RateLimitedPsychicJob } from '../../../../src/package-exports/errors.js'
 import PsychicAppWorkers, {
   PsychicWorkersAppTestInvocationType,
 } from '../../../../src/psychic-app-workers/index.js'
@@ -75,6 +79,105 @@ describe('.work', () => {
 
       await WorkerTestUtils.work({ queue: 'TestappBackgroundJobQueue' })
       expect(bgSpy).toHaveBeenCalledWith('message 1', expect.any(Job))
+    })
+  })
+
+  context('when a job throws RateLimitedPsychicJob', () => {
+    const PAUSE_QUEUE_FOR_SECONDS = 5
+
+    function queueNamed(name: string): Queue {
+      return background.queues.find(queue => queue.name === parallelTestSafeQueueName(name))!
+    }
+
+    async function theOnlyJobIn(queue: Queue) {
+      const jobs = await queue.getJobs(['waiting', 'prioritized', 'delayed', 'active', 'failed'])
+      expect(jobs).toHaveLength(1)
+      return jobs[0]!
+    }
+
+    async function limiterKeyTtl(queue: Queue) {
+      return (await queue.client).pttl(queue.toKey('limiter'))
+    }
+
+    context('on a named workstream whose workers carry a limiter (snazzy sets rateLimit)', () => {
+      it('rejects with RateLimitedPsychicJob and puts the job back in waiting with no attempt counted, where clean() drains it', async () => {
+        vi.spyOn(LastDummyServiceInNamedWorkstream, 'classRunInBG').mockRejectedValue(
+          new RateLimitedPsychicJob({ pauseQueueForSeconds: PAUSE_QUEUE_FOR_SECONDS }),
+        )
+        await LastDummyServiceInNamedWorkstream.background('classRunInBG', 'message 1')
+
+        const queue = queueNamed('snazzy')
+        const jobId = (await theOnlyJobIn(queue)).id!
+
+        await expect(WorkerTestUtils.work()).rejects.toThrow(RateLimitedPsychicJob)
+
+        // BullMQ's own attempt-free path: back to `waiting` (a workstream job's
+        // priority is nested under `group`, invisible to open-source BullMQ)
+        const job = (await Job.fromId(queue, jobId))!
+        expect(await job.getState()).toEqual('waiting')
+        expect(job.attemptsMade).toEqual(0)
+        expect(await queue.getActiveCount()).toEqual(0)
+        expect(await queue.getFailedCount()).toEqual(0)
+
+        // no pause is applied on this path: the test worker carries no limiter,
+        // and a limiter key would outlive clean()
+        expect(await limiterKeyTtl(queue)).toEqual(-2)
+
+        await WorkerTestUtils.clean()
+        expect(await queue.getWaitingCount()).toEqual(0)
+        expect(await queue.getActiveCount()).toEqual(0)
+        expect(await Job.fromId(queue, jobId)).toBeUndefined()
+      })
+    })
+
+    context('on the default workstream, whose workers carry no limiter', () => {
+      it('rejects with the misconfiguration error, failing the job onto its ordinary retry schedule, where clean() drains it', async () => {
+        vi.spyOn(DummyService, 'classRunInBG').mockRejectedValue(
+          new RateLimitedPsychicJob({ pauseQueueForSeconds: PAUSE_QUEUE_FOR_SECONDS }),
+        )
+        await DummyService.background('classRunInBG', 'message 1')
+
+        const queue = queueNamed('TestappBackgroundJobQueue')
+        const jobId = (await theOnlyJobIn(queue)).id!
+
+        await expect(WorkerTestUtils.work()).rejects.toThrow(
+          RateLimitedPsychicJobThrownFromWorkerWithoutLimiter,
+        )
+
+        // an ordinary failure: with the test app's `attempts: 20` and
+        // exponential backoff, the job is parked in `delayed` for its retry
+        const job = (await Job.fromId(queue, jobId))!
+        expect(await job.getState()).toEqual('delayed')
+        expect(job.attemptsMade).toEqual(1)
+        expect(job.failedReason).toContain(
+          `RateLimitedPsychicJob (pause the queue for ${PAUSE_QUEUE_FOR_SECONDS} seconds)`,
+        )
+        expect(job.failedReason).toContain('the default workstream')
+        expect(await queue.getActiveCount()).toEqual(0)
+        expect(await queue.getFailedCount()).toEqual(0)
+        expect(await limiterKeyTtl(queue)).toEqual(-2)
+
+        await WorkerTestUtils.clean()
+        expect(await queue.getDelayedCount()).toEqual(0)
+        expect(await Job.fromId(queue, jobId)).toBeUndefined()
+      })
+    })
+
+    context('any other error', () => {
+      it('still fails the job without rejecting, as before', async () => {
+        vi.spyOn(DummyService, 'classRunInBG').mockRejectedValue(new Error('an ordinary failure'))
+        await DummyService.background('classRunInBG', 'message 1')
+
+        const queue = queueNamed('TestappBackgroundJobQueue')
+        const jobId = (await theOnlyJobIn(queue)).id!
+
+        await WorkerTestUtils.work()
+
+        const job = (await Job.fromId(queue, jobId))!
+        expect(await job.getState()).toEqual('delayed')
+        expect(job.attemptsMade).toEqual(1)
+        expect(job.failedReason).toEqual('an ordinary failure')
+      })
     })
   })
 })

@@ -1,9 +1,11 @@
 import { Job } from 'bullmq'
 import background, { Background } from '../../../src/background/index.js'
 import NoClassForSpecifiedGlobalName from '../../../src/error/background/NoClassForSpecifiedGlobalName.js'
+import RateLimitedPsychicJob from '../../../src/error/background/RateLimitedPsychicJob.js'
 import { BackgroundJobData, JobTypes } from '../../../src/types/background.js'
 import createUser from '../../../test-app/spec/factories/UserFactory.js'
 import User from '../../../test-app/src/app/models/User.js'
+import DummyService from '../../../test-app/src/app/services/DummyService.js'
 
 describe('background (app singleton)', () => {
   describe('.doWork', () => {
@@ -43,6 +45,21 @@ describe('background (app singleton)', () => {
           })
 
           await expect(background.doWork(job)).rejects.toThrow(NoClassForSpecifiedGlobalName)
+        })
+      })
+
+      context('when the method throws RateLimitedPsychicJob', () => {
+        it('propagates it untranslated; the worker processor, not doWork, turns it into a queue pause', async () => {
+          const signal = new RateLimitedPsychicJob({ pauseQueueForSeconds: 5 })
+          vi.spyOn(DummyService, 'classRunInBG').mockRejectedValue(signal)
+
+          const job = buildJob('BackgroundJobQueueStaticJob', {
+            globalName: DummyService.globalName,
+            method: 'classRunInBG',
+            args: ['bottlearum'],
+          })
+
+          await expect(background.doWork(job)).rejects.toBe(signal)
         })
       })
     })

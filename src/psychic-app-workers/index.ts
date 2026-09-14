@@ -211,9 +211,10 @@ export interface PsychicBackgroundNativeBullMQOptions extends PsychicBackgroundS
     defaultWorkerCount?: number
 
     /**
-     * namedQueueWorkers are necessary to work off namedQueues
-     * With BullMQ Pro, namedQueueWorkers can be rate limited (useful
-     * for interacting with external APIs)
+     * namedQueueWorkers are necessary to work off namedQueues.
+     * A named queue's workers can be rate limited with BullMQ's `limiter`
+     * option (https://docs.bullmq.io/guide/rate-limiting; useful for
+     * interacting with external APIs) on open-source BullMQ and BullMQ Pro alike
      */
     namedQueueWorkers?: Record<string, BullMQNativeWorkerOptions>
   }
@@ -273,14 +274,17 @@ export interface PsychicBackgroundSimpleOptions extends PsychicBackgroundSharedO
 
   /**
    * When running background jobs on BullMQ, each named workstream corresponds
-   * to a specific queue and workers created for a named workstream are given
-   * a groupId corresponding to the workstream name
+   * to a specific queue, and jobs backgrounded to a named workstream are added
+   * with a group id equal to the workstream name (a BullMQ Pro concept, ignored
+   * by open-source BullMQ)
    *
-   * named workstreams are useful for dispersing queues among nodes in a Redis cluster
-   * and for running queues on different Redis instances
-   *
-   * With BullMQ Pro, named workstreams can be rate limited (useful
-   * for interacting with external APIs)
+   * named workstreams are useful for dispersing queues among nodes in a Redis cluster,
+   * for running queues on different Redis instances, and for rate limiting: a named
+   * workstream's `rateLimit` bounds how many of its jobs start per time window across
+   * all of its workers and all processes running it, on open-source BullMQ and BullMQ
+   * Pro alike (useful for interacting with external APIs; see
+   * `PsychicBackgroundWorkstreamOptions.rateLimit`). A rate limit targets one external
+   * service, so give each rate-limited service its own named workstream
    */
   namedWorkstreams?: PsychicBackgroundWorkstreamOptions[]
 
@@ -306,43 +310,47 @@ export interface PsychicBackgroundWorkstreamOptions {
   concurrency?: number
 
   /**
-   * See https://docs.bullmq.io/bullmq-pro/groups/rate-limiting for documentation
-   * on rate limiting in BullMQ Pro (requires paid BullMQ Pro license)
+   * Rate-limit this workstream: at most `max` jobs start in any `duration`
+   * milliseconds. Works on open-source BullMQ and on BullMQ Pro.
+   *
+   * The limit is per queue, not per worker: every one of this workstream's
+   * `workerCount` workers, in every process running it, shares one counter kept
+   * in Redis, so `{ max: 1, duration: 1000 }` means one job per second for the
+   * workstream as a whole. It composes with `concurrency`: `concurrency` caps how
+   * many jobs each worker runs at once, `rateLimit` caps how many jobs may start
+   * per window across the whole workstream. For this workstream's workers it
+   * takes precedence over a global `defaultBullMQWorkerOptions.limiter`.
+   *
+   * A rate limit targets one external service, so give each rate-limited service
+   * its own named workstream, never the default workstream, which carries
+   * everything else. A job on this workstream that is told to slow down (an
+   * HTTP 429, say) can throw `RateLimitedPsychicJob` from
+   * `@rvoh/psychic-workers/errors` to pause the whole workstream for the
+   * service's retry-after duration without burning a retry attempt. That pause
+   * replaces this window until it ends, the paused job is fetched first
+   * afterwards, and only BullMQ's `maxStartedAttempts` worker option
+   * (`defaultBullMQWorkerOptions: { maxStartedAttempts: 10 }`, say) bounds how
+   * many times one job may cycle through it; set it on any workstream whose
+   * jobs throw the signal.
+   *
+   * `max` and `duration` are both required positive integers (`duration` in
+   * milliseconds): a partial limit never rate-limited on either build, and
+   * open-source BullMQ floors a fractional `duration` to 0ms (rate limiting
+   * nothing) and fails every job fetch on one past Redis's integer range. A
+   * `rateLimit` that reaches `connect()` without a positive integer `max` and
+   * `duration` — untyped from a JavaScript config, say, or a fraction the
+   * `number` type admits — fails `connect()` with an error naming the
+   * workstream and the field, before any queue or worker is built.
+   *
+   * Implemented as BullMQ's worker `limiter` option
+   * (https://docs.bullmq.io/guide/rate-limiting). On BullMQ Pro it is
+   * additionally applied as the workstream group's rate limit
+   * (https://docs.bullmq.io/bullmq-pro/groups/rate-limiting) — per Pro's docs;
+   * not verified against an installed Pro build.
    */
   rateLimit?: {
-    max?: number
-    duration?: number
-  }
-
-  /**
-   * Optional redis connection. If not provided, the default background redis connection will be used.
-   * See https://docs.bullmq.io/guide/going-to-production for the different settings to use between
-   * queue and worker connections.
-   */
-  queueConnection?: RedisOrRedisClusterConnection
-  workerConnection?: RedisOrRedisClusterConnection
-}
-
-export interface PsychicBackgroundWorkstreamOptions {
-  /**
-   * This will be the name of the queue (and the group if using BullMQ Pro)
-   */
-  name: string
-
-  /**
-   * The number of workers you want to run on this configuration
-   */
-  workerCount?: number
-  // https://docs.bullmq.io/guide/workers/concurrency
-  concurrency?: number
-
-  /**
-   * See https://docs.bullmq.io/bullmq-pro/groups/rate-limiting for documentation
-   * on rate limiting in BullMQ Pro (requires paid BullMQ Pro license)
-   */
-  rateLimit?: {
-    max?: number
-    duration?: number
+    max: number
+    duration: number
   }
 
   /**

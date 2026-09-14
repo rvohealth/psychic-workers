@@ -8,16 +8,23 @@ import {
   JobsOptions,
   Queue,
   QueueOptions,
+  RateLimitError,
   Worker,
   WorkerOptions,
 } from 'bullmq'
 import ActivatingBackgroundWorkersWithoutDefaultWorkerConnection from '../error/background/ActivatingBackgroundWorkersWithoutDefaultWorkerConnection.js'
 import ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection from '../error/background/ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection.js'
+import DeduplicatedJobRequiresMinimumDelay from '../error/background/DeduplicatedJobRequiresMinimumDelay.js'
 import DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
 import NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
+import NamedWorkstreamRateLimitMissingMaxOrDuration from '../error/background/NamedWorkstreamRateLimitMissingMaxOrDuration.js'
 import NoClassForSpecifiedGlobalName from '../error/background/NoClassForSpecifiedGlobalName.js'
 import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName.js'
 import NoQueueForSpecifiedWorkstream from '../error/background/NoQueueForSpecifiedWorkstream.js'
+import RateLimitedPsychicJob from '../error/background/RateLimitedPsychicJob.js'
+import RateLimitedPsychicJobThrownFromWorkerWithoutLimiter, {
+  WorkerQueueDescription,
+} from '../error/background/RateLimitedPsychicJobThrownFromWorkerWithoutLimiter.js'
 import EnvInternal from '../helpers/EnvInternal.js'
 import PsychicAppWorkers, {
   BullMQNativeWorkerOptions,
@@ -41,6 +48,25 @@ import {
 import nameToRedisQueueName from './helpers/nameToRedisQueueName.js'
 
 const DEFAULT_CONCURRENCY = 10
+
+/**
+ * the shortest delay a `jobId` (deduplication key) may be paired with. Below
+ * this, a debounce window is no longer meaningfully longer than the time it
+ * takes a worker to pick a job up, so `_addToQueue` refuses it rather than
+ * silently raising the delay or deduplicating nothing.
+ */
+const MINIMUM_DEDUPLICATION_DELAY_MS = 10000
+
+/**
+ * how far short of the delay the deduplication key's lifetime is set. The key's
+ * expiry is armed from the Redis clock when the script lands, while the job's
+ * fire time comes from the producer's clock, so a key with a lifetime equal to
+ * the delay outlives its own job by one add round trip plus clock skew — and a
+ * call landing in that gap is swallowed after the job has already run, which
+ * breaks the debounce guarantee. That window is one round trip wide however
+ * long the delay is, so the margin is flat rather than proportional.
+ */
+const DEDUPLICATION_KEY_MARGIN_MS = 1000
 
 /**
  * the underlying class driving the `background` singleton,
@@ -134,6 +160,22 @@ export class Background {
    * All of the redis connections that are currently registered
    */
   private redisConnections: RedisOrRedisClusterConnection[] = []
+
+  /**
+   * @internal
+   *
+   * For every queue built by `connect`, whether the workers for that queue
+   * carry a BullMQ `limiter`, plus how the queue was configured. Computed
+   * from the same options object the workers are built from, and recorded
+   * whether or not workers are activated in this process, so that the worker
+   * processors, test invocation, and `WorkerTestUtils` all answer "may a job
+   * on this queue signal {@link RateLimitedPsychicJob}?" the same way.
+   *
+   * Keyed by Queue identity rather than name: a transitional workstream's
+   * queue has the same formatted name as its current twin but its own
+   * configuration.
+   */
+  private queueWorkerRecords = new Map<Queue, WorkerQueueDescription & { hasLimiter: boolean }>()
 
   /**
    * Establishes connection to BullMQ via redis
@@ -318,6 +360,19 @@ export class Background {
       activatingTransitionalWorkstreams?: boolean
     },
   ) {
+    // a partial rateLimit is a compile error, but an untyped config can still deliver one, and
+    // open-source BullMQ would forward it as a limiter it does not validate, failing every job
+    // fetch on that workstream. Refused here, for the current and the transitional workstreams
+    // alike, before any queue or worker of this connect exists (the transitional re-entry below
+    // has already been checked)
+    if (!activatingTransitionalWorkstreams) {
+      this.assertNamedWorkstreamRateLimits(backgroundOptions.namedWorkstreams, false)
+      this.assertNamedWorkstreamRateLimits(
+        (backgroundOptions as PsychicBackgroundSimpleOptions).transitionalWorkstreams?.namedWorkstreams,
+        true,
+      )
+    }
+
     const defaultQueueConnection = backgroundOptions.defaultQueueConnection
     const defaultWorkerConnection = backgroundOptions.defaultWorkerConnection
 
@@ -350,17 +405,28 @@ export class Background {
     /////////////////////////////
     // create default workers //
     /////////////////////////////
+    const defaultWorkerOptions = {
+      autorun: !EnvInternal.isTest,
+      ...backgroundOptions.defaultBullMQWorkerOptions,
+      concurrency: backgroundOptions.defaultWorkstream?.concurrency || DEFAULT_CONCURRENCY,
+    }
+
+    this.recordQueueWorkers(defaultQueue, defaultWorkerOptions, {
+      mode: 'simple',
+      isDefaultQueue: true,
+      configuredName: Background.defaultQueueName,
+      transitional: activatingTransitionalWorkstreams,
+    })
+
     if (activateWorkers) {
       if (!defaultWorkerConnection) throw new ActivatingBackgroundWorkersWithoutDefaultWorkerConnection()
 
       const workerCount = backgroundOptions.defaultWorkstream?.workerCount ?? 1
       for (let i = 0; i < workerCount; i++) {
         this._workers.push(
-          new Background.Worker(formattedQueueName, async job => await this.doWork(job), {
-            autorun: !EnvInternal.isTest,
-            ...backgroundOptions.defaultBullMQWorkerOptions,
+          new Background.Worker(formattedQueueName, this.processorFor(defaultQueue), {
+            ...defaultWorkerOptions,
             connection: defaultWorkerConnection,
-            concurrency: backgroundOptions.defaultWorkstream?.concurrency || DEFAULT_CONCURRENCY,
           }),
         )
       }
@@ -403,6 +469,30 @@ export class Background {
       //////////////////////////
       // create named workers //
       //////////////////////////
+      const namedWorkerOptions = {
+        autorun: !EnvInternal.isTest,
+        ...backgroundOptions.defaultBullMQWorkerOptions,
+        // open-source BullMQ rate limiting (queue-wide, shared by every worker on this queue);
+        // conditional spread so the key is absent when no rateLimit is configured
+        ...(namedWorkstream.rateLimit ? { limiter: namedWorkstream.rateLimit } : {}),
+        // BullMQ Pro option (ignored by open-source BullMQ); Psychic can't be aware of BullMQ Pro options
+        group: {
+          // Pro documents its worker `group` option as `{ limit, concurrency }` with no `id` (grouping
+          // happens at job add, see `_addToQueue`) per https://docs.bullmq.io/bullmq-pro/groups as read
+          // 2026-09-14; not verified against an installed Pro build
+          id: namedWorkstream.name,
+          limit: namedWorkstream.rateLimit,
+        },
+        concurrency: namedWorkstream.concurrency || DEFAULT_CONCURRENCY,
+      }
+
+      this.recordQueueWorkers(namedQueue, namedWorkerOptions, {
+        mode: 'simple',
+        isDefaultQueue: false,
+        configuredName: namedWorkstream.name,
+        transitional: activatingTransitionalWorkstreams,
+      })
+
       if (activateWorkers) {
         if (!namedWorkstreamWorkerConnection)
           throw new ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection(namedWorkstream.name)
@@ -410,17 +500,10 @@ export class Background {
         const workerCount = namedWorkstream.workerCount ?? 1
         for (let i = 0; i < workerCount; i++) {
           this._workers.push(
-            new Background.Worker(namedWorkstreamFormattedQueueName, async job => await this.doWork(job), {
-              autorun: !EnvInternal.isTest,
-              ...backgroundOptions.defaultBullMQWorkerOptions,
-              group: {
-                id: namedWorkstream.name,
-                limit: namedWorkstream.rateLimit,
-              },
+            new Background.Worker(namedWorkstreamFormattedQueueName, this.processorFor(namedQueue), {
+              ...namedWorkerOptions,
               connection: namedWorkstreamWorkerConnection,
-              concurrency: namedWorkstream.concurrency || DEFAULT_CONCURRENCY,
-              // explicitly typing as WorkerOptions because Psychic can't be aware of BullMQ Pro options
-            } as WorkerOptions),
+            }),
           )
         }
       }
@@ -474,11 +557,12 @@ export class Background {
     //////////////////////////
     // create default queue //
     //////////////////////////
-    this.defaultQueue = new Background.Queue(formattedQueueName, {
+    const defaultQueue = new Background.Queue(formattedQueueName, {
       ...defaultBullMQQueueOptions,
       ...nativeBullMQ.defaultQueueOptions,
       connection: defaultQueueConnection,
     })
+    this.defaultQueue = defaultQueue
     ///////////////////////////////
     // end: create default queue //
     ///////////////////////////////
@@ -486,16 +570,27 @@ export class Background {
     /////////////////////////////
     // create default workers //
     /////////////////////////////
+    const defaultWorkerOptions = {
+      autorun: !EnvInternal.isTest,
+      ...backgroundOptions.defaultBullMQWorkerOptions,
+      ...backgroundOptions.nativeBullMQ.defaultWorkerOptions,
+    }
+
+    this.recordQueueWorkers(defaultQueue, defaultWorkerOptions, {
+      mode: 'native',
+      isDefaultQueue: true,
+      configuredName: Background.defaultQueueName,
+      transitional: false,
+    })
+
     if (activateWorkers) {
       if (!defaultWorkerConnection) throw new ActivatingBackgroundWorkersWithoutDefaultWorkerConnection()
 
       const workerCount = nativeBullMQ.defaultWorkerCount ?? 1
       for (let i = 0; i < workerCount; i++) {
         this._workers.push(
-          new Background.Worker(formattedQueueName, async job => await this.doWork(job), {
-            autorun: !EnvInternal.isTest,
-            ...backgroundOptions.defaultBullMQWorkerOptions,
-            ...backgroundOptions.nativeBullMQ.defaultWorkerOptions,
+          new Background.Worker(formattedQueueName, this.processorFor(defaultQueue), {
+            ...defaultWorkerOptions,
             connection: defaultWorkerConnection,
           }),
         )
@@ -525,11 +620,12 @@ export class Background {
 
       const formattedQueuename = nameToRedisQueueName(queueName, namedQueueConnection)
 
-      this.namedQueues[queueName] = new Background.Queue(formattedQueuename, {
+      const namedQueue = new Background.Queue(formattedQueuename, {
         ...defaultBullMQQueueOptions,
         ...namedQueueOptions,
         connection: namedQueueConnection,
       })
+      this.namedQueues[queueName] = namedQueue
 
       //////////////////////////
       // create extra workers //
@@ -542,16 +638,27 @@ export class Background {
       this.groupNames[queueName] ||= []
       if (extraWorkerOptions?.group?.id) this.groupNames[queueName].push(extraWorkerOptions.group.id)
 
+      const namedWorkerOptions = {
+        autorun: !EnvInternal.isTest,
+        ...backgroundOptions.defaultBullMQWorkerOptions,
+        ...extraWorkerOptions,
+      }
+
+      this.recordQueueWorkers(namedQueue, namedWorkerOptions, {
+        mode: 'native',
+        isDefaultQueue: false,
+        configuredName: queueName,
+        transitional: false,
+      })
+
       if (activateWorkers) {
         if (!namedWorkerConnection)
           throw new ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection(queueName)
 
         for (let i = 0; i < extraWorkerCount; i++) {
           this._workers.push(
-            new Background.Worker(formattedQueuename, async job => await this.doWork(job), {
-              autorun: !EnvInternal.isTest,
-              ...backgroundOptions.defaultBullMQWorkerOptions,
-              ...extraWorkerOptions,
+            new Background.Worker(formattedQueuename, this.processorFor(namedQueue), {
+              ...namedWorkerOptions,
               connection: namedWorkerConnection,
             }),
           )
@@ -564,6 +671,130 @@ export class Background {
     //////////////////////////////
     // end: create named queues //
     //////////////////////////////
+  }
+
+  /**
+   * @internal
+   *
+   * records whether the workers built from `workerOptions` for `queue` carry a
+   * BullMQ `limiter`. `workerOptions` is the very object the workers are built
+   * from (minus the connection), so the record and the workers cannot disagree;
+   * it is recorded before the `activateWorkers` check so that processes which
+   * never build workers (test invocation, `WorkerTestUtils`) can still consult it.
+   */
+  private recordQueueWorkers(
+    queue: Queue,
+    workerOptions: { limiter?: WorkerOptions['limiter'] | undefined },
+    description: WorkerQueueDescription,
+  ) {
+    this.queueWorkerRecords.set(queue, { ...description, hasLimiter: Boolean(workerOptions.limiter) })
+  }
+
+  /**
+   * @internal
+   *
+   * throws {@link NamedWorkstreamRateLimitMissingMaxOrDuration} for the first
+   * workstream whose `rateLimit` lacks a positive integer `max` or `duration`
+   * (a stricter predicate than `RateLimitedPsychicJob`'s `pauseQueueForSeconds`,
+   * which rounds a fractional value up rather than refusing it). The type
+   * already requires both, but it admits any number; this catches the untyped
+   * config, and the fractional or oversize value the type allows, that would
+   * otherwise reach open-source BullMQ as a `limiter` it does not validate
+   * (a fractional `duration` is floored to 0ms and rate limits nothing; one
+   * past Redis's integer range fails every job fetch).
+   */
+  private assertNamedWorkstreamRateLimits(
+    namedWorkstreams: PsychicBackgroundWorkstreamOptions[] | undefined,
+    transitional: boolean,
+  ) {
+    for (const { name, rateLimit } of namedWorkstreams ?? []) {
+      if (!rateLimit) continue
+
+      for (const field of ['max', 'duration'] as const) {
+        const value: unknown = rateLimit[field]
+        if (!(typeof value === 'number' && Number.isSafeInteger(value) && value > 0))
+          throw new NamedWorkstreamRateLimitMissingMaxOrDuration(name, transitional, field, value)
+      }
+    }
+  }
+
+  /**
+   * @internal
+   *
+   * When `err` is a {@link RateLimitedPsychicJob} thrown by a job on a queue
+   * whose workers carry no BullMQ `limiter`, returns the misconfiguration error
+   * the job fails with in its place (whose message names the fix for that
+   * queue's configuration); otherwise returns undefined. The worker processors,
+   * test invocation, and `WorkerTestUtils` all run this same check.
+   *
+   * The return is declared as `Error` rather than as the concrete class this
+   * builds. The class is deliberately not part of the package's public surface,
+   * and this method is `public` (three callers, one of them across a module
+   * boundary in `WorkerTestUtils`), so the concrete type would name the class in
+   * the emitted declarations and make it reachable as
+   * `ReturnType<Background['misconfiguredRateLimitSignal']>`. Callers only ever
+   * throw it or fail a job with it, so `Error` is all any of them needs.
+   */
+  public misconfiguredRateLimitSignal(err: unknown, queue: Queue): Error | undefined {
+    if (!(err instanceof RateLimitedPsychicJob)) return
+
+    // every caller hands over a Queue that `connect` built and recorded; anything else is a
+    // programming error, and guessing at its configuration would name a config entry that
+    // does not exist
+    const record = this.queueWorkerRecords.get(queue)
+    if (!record)
+      throw new Error(
+        `[psychic-workers] no worker record for queue ${queue.name}: misconfiguredRateLimitSignal must be given a Queue built by Background#connect (one of Background#queues)`,
+      )
+
+    if (record.hasLimiter) return
+
+    return new RateLimitedPsychicJobThrownFromWorkerWithoutLimiter(err, record)
+  }
+
+  /**
+   * @internal
+   *
+   * the processor every worker on `queue` runs: {@link doWork}, with a
+   * {@link RateLimitedPsychicJob} thrown by the job translated into BullMQ's
+   * own rate-limit signal. The pause is logged at `warn` (its length comes
+   * from the job and is applied as given, rounded up to a whole second), the
+   * queue's limiter key is set for `pauseQueueForSeconds` seconds (pausing
+   * every worker on the queue that carries a
+   * `limiter`), then BullMQ's `RateLimitError` is thrown, which the worker
+   * recognizes by its message and answers by moving the job back to the queue
+   * without counting an attempt or emitting `failed`. `queue` is the Queue
+   * built alongside the worker on the same connection pair, so a transitional
+   * workstream's pause lands on its own Redis.
+   *
+   * Thrown from a job whose worker carries no `limiter`, the signal is a
+   * misconfiguration: the job fails, ordinarily, with
+   * {@link RateLimitedPsychicJobThrownFromWorkerWithoutLimiter}.
+   */
+  private processorFor(queue: Queue) {
+    return async (job: Job) => {
+      try {
+        await this.doWork(job)
+      } catch (err) {
+        const misconfigured = this.misconfiguredRateLimitSignal(err, queue)
+        if (misconfigured) throw misconfigured
+
+        if (err instanceof RateLimitedPsychicJob) {
+          // a fractional number of seconds rounds up: the field is a lower bound on the pause
+          const pauseForSeconds = Math.ceil(err.pauseQueueForSeconds)
+
+          // short of PTTL on the limiter key, nothing else shows that this queue is stalled
+          PsychicApp.logWithLevel(
+            'warn',
+            `[psychic-workers] pausing queue ${queue.name} for ${pauseForSeconds}s: a job threw RateLimitedPsychicJob`,
+          )
+          await queue.rateLimit(pauseForSeconds * 1000)
+          throw new RateLimitError()
+        }
+
+        throw err
+      }
+    }
   }
 
   /**
@@ -833,6 +1064,29 @@ export class Background {
     // mismatches will raise exceptions even in tests
     const queueInstance = this.queueInstance(jobConfig)
 
+    // a `jobId` is a deduplication key, so it is only meaningful behind a delay
+    // of at least MINIMUM_DEDUPLICATION_DELAY_MS. This reads the raw
+    // `delaySeconds`, before the truthiness coercion below collapses 0, -0 and
+    // NaN into `undefined`, and it is set outside the test short-circuit below
+    // so that mismatches will raise exceptions even in tests.
+    if (jobId !== undefined) {
+      const requestedDelay = (delaySeconds ?? NaN) * 1000
+
+      // an empty string is a `jobId` that was given rather than omitted (the
+      // type admits it), but it is not a usable deduplication key: BullMQ
+      // itself refuses it, and the deduplication block below reads it as falsy
+      // and would enqueue an ordinary delayed job with no key and no signal.
+      // Refuse it here, with the rest of the unusable pairs, so it cannot be
+      // the one shape that deduplicates nothing quietly.
+      if (
+        jobId === '' ||
+        !Number.isFinite(requestedDelay) ||
+        Math.abs(requestedDelay) > Number.MAX_SAFE_INTEGER ||
+        requestedDelay < MINIMUM_DEDUPLICATION_DELAY_MS
+      )
+        throw new DeduplicatedJobRequiresMinimumDelay(jobId, delaySeconds, MINIMUM_DEDUPLICATION_DELAY_MS)
+    }
+
     // if delaySeconds is 0, we will intentionally treat
     // this as `undefined`
     const delay = delaySeconds ? delaySeconds * 1000 : undefined
@@ -845,7 +1099,16 @@ export class Background {
     if (EnvInternal.isTest && workersApp.testInvocation === 'automatic') {
       const queue = new Background.Queue('TestQueue', { connection: {} })
       const job = new Job(queue, jobType, jobData, {})
-      await this.doWork(job)
+
+      try {
+        await this.doWork(job)
+      } catch (err) {
+        // the job's real queue (not the throwaway TestQueue) decides whether a
+        // RateLimitedPsychicJob is a usable signal or a misconfiguration, exactly
+        // as the worker would in production
+        throw (queueInstance && this.misconfiguredRateLimitSignal(err, queueInstance)) || err
+      }
+
       return
       //
     }
@@ -859,7 +1122,11 @@ export class Background {
     if (delay && jobId) {
       jobOptions.deduplication = {
         id: jobId,
-        ttl: delay,
+        // deliberately shorter than the delay: see DEDUPLICATION_KEY_MARGIN_MS.
+        // clamped to a positive integer because BullMQ hands this straight to
+        // Redis `SET ... PX`, which rejects a fractional argument, and a
+        // duration built from e.g. `{ seconds: 10.0005 }` is fractional.
+        ttl: Math.max(1, Math.floor(delay - DEDUPLICATION_KEY_MARGIN_MS)),
         extend: true,
         replace: true,
       }

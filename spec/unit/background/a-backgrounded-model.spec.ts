@@ -1,4 +1,6 @@
 import { Job } from 'bullmq'
+import { MockInstance } from 'vitest'
+import DeduplicatedJobRequiresMinimumDelay from '../../../src/error/background/DeduplicatedJobRequiresMinimumDelay.js'
 import { background } from '../../../src/package-exports/index.js'
 import PsychicAppWorkers, {
   PsychicWorkersAppTestInvocationType,
@@ -151,7 +153,7 @@ describe('a backgrounded model', () => {
               extend: true,
               id: 'myjob',
               replace: true,
-              ttl: 15000,
+              ttl: 14000,
             },
             delay: 15000,
             group: { id: 'snazzy', priority: 1 },
@@ -199,7 +201,7 @@ describe('a backgrounded model', () => {
         const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         const user = await User.create({ email: 'a@b.com' })
 
-        await user.backgroundWithDelay({ seconds: 7, jobId: 'myjob' }, 'instanceRunInBG', 'bottlearum')
+        await user.backgroundWithDelay({ seconds: 15, jobId: 'myjob' }, 'instanceRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith(
           'BackgroundJobQueueModelInstanceJob',
@@ -214,9 +216,9 @@ describe('a backgrounded model', () => {
               extend: true,
               id: 'myjob',
               replace: true,
-              ttl: 7000,
+              ttl: 14000,
             },
-            delay: 7000,
+            delay: 15000,
             group: { id: 'snazzy', priority: 1 },
           },
         )
@@ -291,7 +293,7 @@ describe('a backgrounded model', () => {
                 extend: true,
                 id: 'myjob',
                 replace: true,
-                ttl: 15000,
+                ttl: 14000,
               },
               delay: 15000,
               group: { id: 'snazzy', priority: 4 },
@@ -372,7 +374,7 @@ describe('a backgrounded model', () => {
           const user = await User.create({ email: 'a@b.com' })
 
           await user.backgroundWith(
-            { delay: { seconds: 7, jobId: 'myjob' }, priority: 'last' },
+            { delay: { seconds: 15, jobId: 'myjob' }, priority: 'last' },
             'instanceRunInBG',
             'bottlearum',
           )
@@ -390,11 +392,142 @@ describe('a backgrounded model', () => {
                 extend: true,
                 id: 'myjob',
                 replace: true,
-                ttl: 7000,
+                ttl: 14000,
               },
-              delay: 7000,
+              delay: 15000,
               group: { id: 'snazzy', priority: 4 },
             },
+          )
+        })
+      })
+    })
+  })
+
+  /**
+   * The same deduplication default, reached through the model-instance entry
+   * point rather than the static one — a separate caller of `_addToQueue`. The
+   * numbers themselves, the fractional clamp and the automatic-invocation
+   * refusal are pinned in `a-backgrounded-service.spec.ts`.
+   */
+  describe('deduplication (debounce) options', () => {
+    let spy: MockInstance
+    let originalTestInvocation: PsychicWorkersAppTestInvocationType
+
+    beforeEach(async () => {
+      const workersApp = PsychicAppWorkers.getOrFail()
+      originalTestInvocation = workersApp.testInvocation
+      workersApp.set('testInvocation', 'manual')
+
+      background.connect()
+      spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
+
+      await WorkerTestUtils.clean()
+    })
+
+    afterEach(() => {
+      const workersApp = PsychicAppWorkers.getOrFail()
+      workersApp.set('testInvocation', originalTestInvocation)
+    })
+
+    context('#backgroundWithDelay', () => {
+      it('arms the deduplication key for the delay minus the one second margin', async () => {
+        const user = await User.create({ email: 'a@b.com' })
+
+        await user.backgroundWithDelay({ seconds: 10, jobId: 'myjob' }, 'instanceRunInBG', 'bottlearum')
+
+        expect(spy).toHaveBeenCalledWith(
+          'BackgroundJobQueueModelInstanceJob',
+          {
+            globalName: User.globalName,
+            args: ['bottlearum'],
+            id: user.id,
+            method: 'instanceRunInBG',
+          },
+          {
+            deduplication: { extend: true, id: 'myjob', replace: true, ttl: 9000 },
+            delay: 10000,
+            group: { id: 'snazzy', priority: 1 },
+          },
+        )
+      })
+
+      context('with a delay under ten seconds', () => {
+        it('throws when a jobId is present, enqueuing nothing', async () => {
+          const user = await User.create({ email: 'a@b.com' })
+
+          await expect(
+            user.backgroundWithDelay({ seconds: 9, jobId: 'myjob' }, 'instanceRunInBG', 'bottlearum'),
+          ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+
+          expect(spy).not.toHaveBeenCalled()
+        })
+
+        it('enqueues the same short delay when no jobId is present', async () => {
+          const user = await User.create({ email: 'a@b.com' })
+
+          await user.backgroundWithDelay({ seconds: 9 }, 'instanceRunInBG', 'bottlearum')
+
+          expect(spy).toHaveBeenCalledWith(
+            'BackgroundJobQueueModelInstanceJob',
+            {
+              globalName: User.globalName,
+              args: ['bottlearum'],
+              id: user.id,
+              method: 'instanceRunInBG',
+            },
+            { delay: 9000, group: { id: 'snazzy', priority: 1 } },
+          )
+        })
+      })
+    })
+
+    context('#backgroundWith', () => {
+      it('arms the deduplication key for the delay minus the one second margin', async () => {
+        const user = await User.create({ email: 'a@b.com' })
+
+        await user.backgroundWith({ delay: { seconds: 10, jobId: 'myjob' } }, 'instanceRunInBG', 'bottlearum')
+
+        expect(spy).toHaveBeenCalledWith(
+          'BackgroundJobQueueModelInstanceJob',
+          {
+            globalName: User.globalName,
+            args: ['bottlearum'],
+            id: user.id,
+            method: 'instanceRunInBG',
+          },
+          {
+            deduplication: { extend: true, id: 'myjob', replace: true, ttl: 9000 },
+            delay: 10000,
+            group: { id: 'snazzy', priority: 1 },
+          },
+        )
+      })
+
+      context('with a delay under ten seconds', () => {
+        it('throws when a jobId is present, enqueuing nothing', async () => {
+          const user = await User.create({ email: 'a@b.com' })
+
+          await expect(
+            user.backgroundWith({ delay: { seconds: 9, jobId: 'myjob' } }, 'instanceRunInBG', 'bottlearum'),
+          ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+
+          expect(spy).not.toHaveBeenCalled()
+        })
+
+        it('enqueues the same short delay when no jobId is present', async () => {
+          const user = await User.create({ email: 'a@b.com' })
+
+          await user.backgroundWith({ delay: { seconds: 9 } }, 'instanceRunInBG', 'bottlearum')
+
+          expect(spy).toHaveBeenCalledWith(
+            'BackgroundJobQueueModelInstanceJob',
+            {
+              globalName: User.globalName,
+              args: ['bottlearum'],
+              id: user.id,
+              method: 'instanceRunInBG',
+            },
+            { delay: 9000, group: { id: 'snazzy', priority: 1 } },
           )
         })
       })
