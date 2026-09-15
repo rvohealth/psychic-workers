@@ -74,8 +74,14 @@
  * (rejecting with it, the job back in the queue) rather than looping.
  *
  * `pauseQueueForSeconds` must be a positive, finite number of safe magnitude;
- * the constructor throws a `RangeError` otherwise, at the throw site, before
- * anything reaches Redis. A fractional number of seconds is legal and is
+ * the constructor throws a `RangeError` otherwise, at the throw site, so a
+ * nonsense value fails there rather than at the pause. The bound is on the
+ * value in **seconds**; what is sent to Redis is that value in milliseconds, a
+ * thousand times larger. Redis accepts it — its expiry range is far wider than
+ * this — but at the very top of the legal range the product is past
+ * `Number.MAX_SAFE_INTEGER` and so is not exactly the number asked for. The
+ * imprecision begins at a pause of roughly 285 million years, which is why the
+ * bound is left where it is. A fractional number of seconds is legal and is
  * rounded **up** — the field is a lower bound on the pause, so overshooting it
  * by under a second cannot break the promise, while rounding down could.
  */

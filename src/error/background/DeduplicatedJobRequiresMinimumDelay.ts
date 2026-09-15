@@ -8,11 +8,14 @@
  * delay and swallows repeat calls that land while it is live. That is only
  * meaningful when the delay is long enough to outlast the time it takes a
  * worker to pick a job up, so this package requires at least ten seconds.
- * Anything shorter — and zero, negative, `NaN`, `Infinity`, or a magnitude
- * past `Number.MAX_SAFE_INTEGER`, all of which `durationToSeconds` will
- * happily sum and hand on unvalidated — is refused here rather than quietly
- * enqueued with no deduplication at all, or forwarded to Redis `SET ... PX`,
- * which rejects a fractional or out-of-range argument.
+ * Anything shorter — and zero, negative, `Infinity`, `NaN`, or a magnitude past
+ * `Number.MAX_SAFE_INTEGER` — is refused here rather than quietly enqueued with
+ * no deduplication at all, or forwarded to Redis `SET ... PX`, which rejects a
+ * fractional or out-of-range argument. `durationToSeconds` does not catch any
+ * of these: it validates nothing, and its falsy-field sum silently drops a
+ * `NaN` field rather than propagating it (`{ hours: 1, seconds: NaN }` is
+ * `3600`), so `{ seconds: NaN }` reaches this check as `0` and the remaining
+ * shapes reach it as themselves.
  *
  * The check runs before the test-mode short circuit in `_addToQueue`, so a
  * consumer's default test environment raises this exactly as production does.

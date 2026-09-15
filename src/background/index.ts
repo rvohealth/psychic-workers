@@ -74,7 +74,29 @@ const DEDUPLICATION_KEY_MARGIN_MS = 1000
  */
 export class Background {
   /**
-   * returns the default queue name for your app
+   * returns the **logical** name of your app's default queue, built from your
+   * app name (`MyAppBackgroundJobQueue`).
+   *
+   * ## it is not the name the queue has in Redis
+   *
+   * `connect` rewrites every queue name — this one and each named workstream's
+   * — per connection, through `nameToRedisQueueName`
+   * (`src/background/helpers/nameToRedisQueueName.ts`). Braces are always
+   * stripped. Then, on an ioredis `Cluster` connection, the whole name is
+   * wrapped in Redis Cluster hash tags (`{MyAppBackgroundJobQueue}`) so that
+   * the queue's keys hash to one slot; on a plain `Redis` connection it is left
+   * bare, except under test, where a parallel vitest worker appends its pool id
+   * (`MyAppBackgroundJobQueue-2`). Only one of the two ever applies to a given
+   * connection: the hash tag is cluster-only, the test suffix non-cluster-only.
+   *
+   * ## so do not build Redis keys from this
+   *
+   * Every key BullMQ writes for the queue is namespaced by the *rewritten*
+   * name, including the deduplication key behind a delayed job's `jobId`, whose
+   * shape is `<prefix>:<queueName>:de:<jobId>`. A script that composes a key
+   * from this getter matches in plain-Redis development and finds nothing in
+   * cluster production — which looks the same as an empty queue. Read
+   * `queue.name` off `background.queues` after connecting instead.
    */
   public static get defaultQueueName() {
     const psychicWorkersApp = PsychicAppWorkers.getOrFail()
@@ -178,7 +200,29 @@ export class Background {
   private queueWorkerRecords = new Map<Queue, WorkerQueueDescription & { hasLimiter: boolean }>()
 
   /**
-   * Establishes connection to BullMQ via redis
+   * Establishes connection to BullMQ via redis: builds the `Queue` objects for
+   * the default and named workstreams and, only when `activateWorkers` is true,
+   * the `Worker` objects that run jobs off them.
+   *
+   * ## it is called for you
+   *
+   * You rarely call this yourself. Psychic connects on the
+   * `server:init:after-routes` hook, on every enqueue path (`staticMethod`,
+   * `scheduledMethod`, `modelInstanceMethod` and `unschedule`), in CLI codegen
+   * (the `cli:sync` hook, via `ASTWorkersSchemaBuilder`), in the
+   * `WorkerTestUtils` helpers (`work()`, `workScheduled()` and `clean()`), and
+   * in `work()` — which is the one caller in this package that passes
+   * `activateWorkers: true`.
+   *
+   * ## connecting does not make this a worker process
+   *
+   * `activateWorkers` defaults to `false`, so connecting never starts workers
+   * by itself. A webserver, a console session or a one-off script that connects
+   * gets the producer side only: queues it can add jobs to and inspect, and
+   * nothing that consumes them. In practice jobs are worked by a process
+   * running `work()`; `activateWorkers` is on this method's own signature, so a
+   * caller can build workers directly, but nothing in this package does that
+   * outside `work()`.
    */
   public connect({
     activateWorkers = false,
@@ -206,7 +250,20 @@ export class Background {
   }
 
   /**
-   * Returns all the queues in your application
+   * Returns all the queues in your application: the default queue, every named
+   * queue, and their transitional twins when transitional workstreams are
+   * configured.
+   *
+   * `connect` is what populates this, and before it has run the getter returns
+   * an **empty array** — the fields it compacts all start out null or empty —
+   * with no error and no warning. An inspection or maintenance script that
+   * forgets to connect therefore iterates nothing, exits 0, and is
+   * indistinguishable from an application with nothing queued. Call
+   * `background.connect()` first.
+   *
+   * Each `Queue` here carries the rewritten Redis name rather than the name you
+   * configured; see `Background.defaultQueueName` for how that rewrite works.
+   * `queue.name` is the name Redis actually knows.
    */
   public get queues(): Queue[] {
     return compact([
@@ -1123,9 +1180,19 @@ export class Background {
       jobOptions.deduplication = {
         id: jobId,
         // deliberately shorter than the delay: see DEDUPLICATION_KEY_MARGIN_MS.
-        // clamped to a positive integer because BullMQ hands this straight to
-        // Redis `SET ... PX`, which rejects a fractional argument, and a
-        // duration built from e.g. `{ seconds: 10.0005 }` is fractional.
+        //
+        // `Math.floor` is live: BullMQ hands this straight to Redis
+        // `SET ... PX`, which rejects a fractional argument, and a duration
+        // built from e.g. `{ seconds: 10.0005 }` is fractional.
+        //
+        // `Math.max(1, …)` is belt-and-braces and cannot currently fire. The
+        // guard above has already refused any `jobId` under
+        // MINIMUM_DEDUPLICATION_DELAY_MS, so `delay - DEDUPLICATION_KEY_MARGIN_MS`
+        // is at least 9000 on every path into here. It is kept because it is
+        // the coupling that is easy to miss: if the floor is ever lowered to
+        // within a second of the margin, this clamp would turn an illegal
+        // lifetime into a 1ms key — deduplication silently off — rather than an
+        // error. Anyone lowering the floor should revisit this line first.
         ttl: Math.max(1, Math.floor(delay - DEDUPLICATION_KEY_MARGIN_MS)),
         extend: true,
         replace: true,

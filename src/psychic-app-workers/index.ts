@@ -166,9 +166,29 @@ export interface BullMQNativeWorkerOptions extends WorkerOptions {
     concurrency?: number
     priority?: number
   }
-  // https://docs.bullmq.io/guide/workers/concurrency
+  /**
+   * How many jobs each worker built from this configuration runs at once
+   * (https://docs.bullmq.io/guide/workers/concurrency).
+   *
+   * Native BullMQ mode writes no concurrency of its own, so BullMQ's default of
+   * **1** applies unless this — or `defaultBullMQWorkerOptions.concurrency` —
+   * sets it. Simple mode always writes 10 unless the workstream overrides it,
+   * so a queue moved between the two modes changes how many jobs it runs at
+   * once by a factor of ten unless you set this. See
+   * `PsychicBackgroundWorkstreamOptions.concurrency`.
+   */
   concurrency?: number
-  // the number of workers to create with this configuration
+  /**
+   * the number of workers to create with this configuration, in this process.
+   *
+   * Read **only** for `nativeBullMQ.namedQueueWorkers`, where it defaults to 1
+   * (a named queue with no entry in `namedQueueWorkers` gets no workers at
+   * all). It is *not* read for `nativeBullMQ.defaultWorkerOptions`: the default
+   * queue's worker count comes from `nativeBullMQ.defaultWorkerCount`.
+   *
+   * See `PsychicBackgroundWorkstreamOptions.workerCount` for what a worker is
+   * and for the `workerCount × concurrency` product.
+   */
   workerCount?: number
 }
 
@@ -194,19 +214,32 @@ export interface PsychicBackgroundNativeBullMQOptions extends PsychicBackgroundS
     /**
      * Native BullMQ options to provide to configure the default workers
      * for psychic. By default, Psychic leverages a single-queue system, with
-     * many workers running off the queue. Each worker receives the
-     * same worker configuration, so this configuration is really
-     * only used to supply the number of default workers that you want.
+     * many workers running off the queue. Each of those workers receives this
+     * same configuration, spread over `defaultBullMQWorkerOptions` — so this is
+     * where `concurrency`, `limiter` and every other BullMQ worker option for
+     * the default workers comes from.
+     *
+     * It does **not** supply how many default workers there are: a
+     * `workerCount` set here is never read, and the count comes from
+     * `defaultWorkerCount` below.
      */
     defaultWorkerOptions?: BullMQNativeWorkerOptions
 
     /**
      * The number of default workers to run against the default Psychic
-     * background queues.
+     * background queues, in this process.
      *
      * By default, Psychic leverages a single-queue system, with
      * many workers running off a single queue. This number determines
-     * the number of those default workers to provide.
+     * the number of those default workers to provide, and it is the only
+     * source of that count in native mode — `defaultWorkerOptions.workerCount`
+     * is not read. Defaults to 1, and takes effect only in a process that
+     * connects with `activateWorkers: true`.
+     *
+     * Each of those workers runs `defaultWorkerOptions.concurrency` jobs at
+     * once, which is BullMQ's default of 1 when nothing sets it, so the jobs in
+     * flight here are the product of the two. See
+     * `PsychicBackgroundWorkstreamOptions.workerCount`.
      */
     defaultWorkerCount?: number
 
@@ -263,12 +296,27 @@ export interface PsychicBackgroundSimpleOptions extends PsychicBackgroundSharedO
 
   /**
    * Every Psychic application that leverages simple background jobs will have a default
-   * workstream. Set workerCount to set the number of workers that will work through the
-   * default queue
+   * workstream, whose queue carries every job not backgrounded to a named
+   * workstream. Both fields mean exactly what they mean on a named workstream —
+   * see `PsychicBackgroundWorkstreamOptions.workerCount` and `.concurrency`.
    */
   defaultWorkstream?: {
+    /**
+     * The number of workers that will work through the default queue, in this
+     * process. Defaults to 1. See
+     * `PsychicBackgroundWorkstreamOptions.workerCount` for what a worker is and
+     * for the `workerCount × concurrency` product.
+     */
     workerCount?: number
-    // https://docs.bullmq.io/guide/workers/concurrency
+    /**
+     * How many jobs each default worker runs at once
+     * (https://docs.bullmq.io/guide/workers/concurrency). **Defaults to 10**,
+     * as everywhere in simple mode, and overrides any `concurrency` set in
+     * `defaultBullMQWorkerOptions`. Native BullMQ mode writes no concurrency at
+     * all, so BullMQ's default of 1 applies there — see
+     * `PsychicBackgroundWorkstreamOptions.concurrency` for that tenfold
+     * difference.
+     */
     concurrency?: number
   }
 
@@ -303,10 +351,46 @@ export interface PsychicBackgroundWorkstreamOptions {
   name: string
 
   /**
-   * The number of workers you want to run on this configuration
+   * The number of workers you want to run on this configuration, in **this
+   * process**. Defaults to 1.
+   *
+   * ## what a "worker" is here
+   *
+   * `connect({ activateWorkers: true })` loops this count constructing BullMQ
+   * `Worker` objects inside the process that called it; it forks and spawns
+   * nothing. Those workers share that one process's event loop, and the job
+   * processor they are given is an inline async function rather than a
+   * processor file, so BullMQ's sandboxed-process and worker-thread routes are
+   * never taken. Raising this number buys concurrent *waiting* — on Redis, on
+   * the database, on an HTTP call — not concurrent CPU. CPU parallelism comes
+   * from running more worker processes.
+   *
+   * ## how many jobs actually run at once
+   *
+   * `workerCount × concurrency` is the ceiling on this workstream's jobs in
+   * flight in one process; multiply by the number of processes running
+   * `work()` for the application-wide ceiling. That product, not either field
+   * on its own, is the number to size against a downstream limit such as a
+   * connection pool or an external API's quota. Where this workstream also sets
+   * `rateLimit`, that bounds how many jobs *start* per window across every
+   * worker and process, while these two bound how many are running at once.
    */
   workerCount?: number
-  // https://docs.bullmq.io/guide/workers/concurrency
+  /**
+   * How many jobs each of this workstream's workers runs at once
+   * (https://docs.bullmq.io/guide/workers/concurrency).
+   *
+   * **In simple mode this defaults to 10.** Psychic always writes a
+   * `concurrency` onto a simple-mode worker, falling back to 10 when the
+   * workstream does not set one — which also means it overrides any
+   * `concurrency` placed in `defaultBullMQWorkerOptions`. Native BullMQ mode
+   * writes none, so BullMQ's own default of 1 applies there unless a worker
+   * options bag sets it. Moving a queue between the two modes therefore changes
+   * how many jobs it runs at once by a factor of ten, with nothing in either
+   * configuration saying so.
+   *
+   * See `workerCount` above for the `workerCount × concurrency` product.
+   */
   concurrency?: number
 
   /**
