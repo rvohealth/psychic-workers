@@ -100,7 +100,7 @@ describe('.work', () => {
     }
 
     context('on a named workstream whose workers carry a limiter (snazzy sets rateLimit)', () => {
-      it('rejects with RateLimitedPsychicJob and puts the job back in waiting with no attempt counted, where clean() drains it', async () => {
+      it('rejects with RateLimitedPsychicJob and puts the job back in prioritized with no attempt counted, where clean() drains it', async () => {
         vi.spyOn(LastDummyServiceInNamedWorkstream, 'classRunInBG').mockRejectedValue(
           new RateLimitedPsychicJob({ pauseQueueForSeconds: PAUSE_QUEUE_FOR_SECONDS }),
         )
@@ -111,10 +111,12 @@ describe('.work', () => {
 
         await expect(WorkerTestUtils.work()).rejects.toThrow(RateLimitedPsychicJob)
 
-        // BullMQ's own attempt-free path: back to `waiting` (a workstream job's
-        // priority is nested under `group`, invisible to open-source BullMQ)
+        // BullMQ's own attempt-free path: back onto the queue unworked. The state
+        // is `prioritized` rather than `waiting` because this service's
+        // `backgroundJobConfig` sets `priority: 'last'`, and a workstream job now
+        // carries its priority at the top level where open-source BullMQ reads it
         const job = (await Job.fromId(queue, jobId))!
-        expect(await job.getState()).toEqual('waiting')
+        expect(await job.getState()).toEqual('prioritized')
         expect(job.attemptsMade).toEqual(0)
         expect(await queue.getActiveCount()).toEqual(0)
         expect(await queue.getFailedCount()).toEqual(0)

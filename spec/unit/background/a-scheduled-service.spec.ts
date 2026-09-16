@@ -29,7 +29,9 @@ describe('a scheduled service', () => {
         { pattern: '* * * * *' },
         {
           name: 'BackgroundJobQueueStaticJob',
-          opts: {},
+          // DefaultDummyScheduledService configures no priority, so the scheduler
+          // template carries the mapped 'default' of 2
+          opts: { priority: 2 },
           data: {
             globalName: `services/${serviceClass.name}`,
             args: ['bottlearum'],

@@ -143,7 +143,7 @@ describe('a backgrounded service', () => {
         workersApp.set('testInvocation', originalTestInvocation)
       })
 
-      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
+      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and writes the priority both at the top level and into the group object', async () => {
         const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         await LastDummyServiceInNamedWorkstream.background('classRunInBG', 'bottlearum')
 
@@ -155,7 +155,7 @@ describe('a backgrounded service', () => {
             importKey: undefined,
             method: 'classRunInBG',
           },
-          { group: { id: 'snazzy', priority: 4 } },
+          { priority: 4, group: { id: 'snazzy', priority: 4 } },
         )
       })
     })
@@ -288,7 +288,7 @@ describe('a backgrounded service', () => {
         workersApp.set('testInvocation', originalTestInvocation)
       })
 
-      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
+      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and writes the priority both at the top level and into the group object', async () => {
         const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         await LastDummyServiceInNamedWorkstream.backgroundWithDelay(
           { seconds: 15, jobId: 'myjob' },
@@ -312,6 +312,7 @@ describe('a backgrounded service', () => {
               ttl: 14000,
             },
             delay: 15000,
+            priority: 4,
             group: { id: 'snazzy', priority: 4 },
           },
         )
@@ -451,7 +452,7 @@ describe('a backgrounded service', () => {
         workersApp.set('testInvocation', originalTestInvocation)
       })
 
-      it('preserves the workstream and moves the overridden priority into the group object', async () => {
+      it('preserves the workstream and writes the overridden priority both at the top level and into the group object', async () => {
         const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         await LastDummyServiceInNamedWorkstream.backgroundWith(
           { delay: { seconds: 15, jobId: 'myjob' }, priority: 'urgent' },
@@ -475,6 +476,7 @@ describe('a backgrounded service', () => {
               ttl: 14000,
             },
             delay: 15000,
+            priority: 1,
             group: { id: 'snazzy', priority: 1 },
           },
         )

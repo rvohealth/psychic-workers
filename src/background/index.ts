@@ -1065,12 +1065,45 @@ export class Background {
     const queueInstance = this.queueInstance(jobConfig)
     if (!queueInstance) throw new Error(`Missing queue for: ${jobConfig.queue?.toString()}`)
 
+    // `JobSchedulerTemplateOptions` declares every field optional — `priority?: number`
+    // among them — so `{ priority: maybePriority }`, the normal shape when the value comes
+    // from a config object, an env var or a nullable column, carries an own `priority` key
+    // whose value is `undefined` — a shape TypeScript admits for any consumer on the
+    // default `exactOptionalPropertyTypes: false`, and checks not at all from JavaScript.
+    // Spread over the mapped priority below
+    // it would erase it, BullMQ would then drop the undefined value before Redis, and the
+    // scheduler template would store no priority at all — putting every cron run this
+    // scheduler produces back in the `wait` list. Stripping the undefined-valued keys makes
+    // "caller-supplied options win" mean a caller-supplied *value*, not a caller-supplied
+    // key.
+    const definedScheduleOpts = Object.fromEntries(
+      Object.entries(scheduleOpts).filter(([, value]) => value !== undefined),
+    ) as JobSchedulerTemplateOptions
+
     await queueInstance.upsertJobScheduler(
       schedulerId,
       { pattern },
       {
         name: 'BackgroundJobQueueStaticJob',
-        opts: scheduleOpts,
+
+        // the priority from the service's `backgroundJobConfig`, written where open-source
+        // BullMQ reads it — the same top-level priority `_addToQueue` writes on an ordinary
+        // job. Without it BullMQ enqueues every cron run at no priority at all, into the
+        // `wait` list, which it drains before it looks at the prioritized set — so a
+        // priority-less cron job is fetched ahead of every prioritized job on its queue.
+        //
+        // The two enqueue sites are written in opposite shapes on purpose. `_addToQueue`
+        // spreads its options first and writes `priority` last, because nothing there can
+        // supply a priority of its own — the options it merges are the ones it built
+        // itself (delay, deduplication), and the priority always comes from the job config
+        // or a `backgroundWith` override. This site must let an explicit `scheduleOpts`
+        // priority through, so it spreads last instead. The invariant they share is the
+        // one that matters: nothing can leave the mapped priority off the job. There it
+        // follows from the ordering; here it follows from the undefined-stripping above.
+        opts: {
+          priority: this.mapPriorityWordToPriorityNumber(this.jobConfigToPriority(jobConfig)),
+          ...definedScheduleOpts,
+        },
 
         data: {
           globalName,
@@ -1294,24 +1327,48 @@ export class Background {
       }
     }
 
-    if (groupId && priority) {
-      await queueInstance.add(jobType, jobData, {
-        ...jobOptions,
-        group: {
-          ...this.groupIdToGroupConfig(groupId),
-          priority: this.mapPriorityWordToPriorityNumber(priority),
-        },
-        // explicitly typing as JobsOptions because Psychic can't be aware of BullMQ Pro options
-      } as JobsOptions)
-      //
-    } else {
-      await queueInstance.add(jobType, jobData, {
-        ...jobOptions,
-        group: this.groupIdToGroupConfig(groupId),
-        priority: this.mapPriorityWordToPriorityNumber(priority),
-        // explicitly typing as JobsOptions because Psychic can't be aware of BullMQ Pro options
-      } as JobsOptions)
+    const priorityNumber = this.mapPriorityWordToPriorityNumber(priority)
+
+    // `group` is a BullMQ Pro option: open-source BullMQ's `JobsOptions` does not declare
+    // it, so TypeScript checks nothing about it at the `add` call below — a misspelled key
+    // or a body Pro would reject compiles clean. Naming the shape here is what gives the
+    // compiler something to check the key and its body against.
+    interface ProGroupOption {
+      group: { id: string; priority: number }
     }
+
+    const groupConfig = this.groupIdToGroupConfig(groupId)
+
+    // BullMQ Pro group priority (ignored by open-source BullMQ), which orders this job's
+    // group against the queue's other groups. It sits alongside, rather than instead of,
+    // the job priority below: Pro documents the two as answering different questions —
+    // which group runs next, and which job within a group runs next — per
+    // https://docs.bullmq.io/bullmq-pro/groups as read 2026-09-14; not verified against an
+    // installed Pro build. Empty for an ungrouped job, so it carries no `group` key at all.
+    const proGroupOption: ProGroupOption | Record<string, never> = groupConfig
+      ? { group: { ...groupConfig, priority: priorityNumber } }
+      : {}
+
+    await queueInstance.add(jobType, jobData, {
+      ...jobOptions,
+
+      // open-source BullMQ's job priority, and the only priority it reads. Written on
+      // every job, grouped or not: a group is a BullMQ Pro concept, so without Pro the
+      // `group` key spread in below is stored but never read — `Job.optsAsJSON` passes
+      // unrecognised option keys straight through, so it round-trips out of Redis, but
+      // nothing schedules on it — and a priority living only inside it would silently do
+      // nothing. Named workstreams are the case that matters — every one of their jobs
+      // carries a group id (the workstream name, see `jobConfigToGroupId`), even though
+      // the workstream already has its own queue and needs no group to route.
+      //
+      // Written last, after the spread, which is the opposite shape from the scheduler
+      // template in `scheduledMethod` — deliberately, since `jobOptions` here is built by
+      // this method rather than supplied by the caller. See the comment there for why the
+      // two differ and what they nonetheless guarantee alike.
+      priority: priorityNumber,
+
+      ...proGroupOption,
+    })
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

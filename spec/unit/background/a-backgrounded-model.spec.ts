@@ -45,7 +45,7 @@ describe('a backgrounded model', () => {
         workersApp.set('testInvocation', originalTestInvocation)
       })
 
-      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
+      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and writes the priority both at the top level and into the group object', async () => {
         const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         await User.background('classRunInBG', 'bottlearum')
 
@@ -57,7 +57,7 @@ describe('a backgrounded model', () => {
             importKey: undefined,
             method: 'classRunInBG',
           },
-          { group: { id: 'snazzy', priority: 1 } },
+          { priority: 1, group: { id: 'snazzy', priority: 1 } },
         )
       })
     })
@@ -89,7 +89,7 @@ describe('a backgrounded model', () => {
         workersApp.set('testInvocation', originalTestInvocation)
       })
 
-      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
+      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and writes the priority both at the top level and into the group object', async () => {
         const user = await User.create({ email: 'a@b.com' })
         const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         await user.background('instanceRunInBG', 'bottlearum')
@@ -102,7 +102,7 @@ describe('a backgrounded model', () => {
             id: user.id,
             method: 'instanceRunInBG',
           },
-          { group: { id: 'snazzy', priority: 1 } },
+          { priority: 1, group: { id: 'snazzy', priority: 1 } },
         )
       })
     })
@@ -136,7 +136,7 @@ describe('a backgrounded model', () => {
         workersApp.set('testInvocation', originalTestInvocation)
       })
 
-      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
+      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and writes the priority both at the top level and into the group object', async () => {
         const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         await User.backgroundWithDelay({ seconds: 15, jobId: 'myjob' }, 'classRunInBG', 'bottlearum')
 
@@ -156,6 +156,7 @@ describe('a backgrounded model', () => {
               ttl: 14000,
             },
             delay: 15000,
+            priority: 1,
             group: { id: 'snazzy', priority: 1 },
           },
         )
@@ -197,7 +198,7 @@ describe('a backgrounded model', () => {
         workersApp.set('testInvocation', originalTestInvocation)
       })
 
-      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and moves the priority into the group object', async () => {
+      it('adds the job to the queue corresponding to the workstream name with the workstream name as the group ID, and writes the priority both at the top level and into the group object', async () => {
         const spy = vi.spyOn(background.queues[1]!, 'add').mockResolvedValue({} as Job)
         const user = await User.create({ email: 'a@b.com' })
 
@@ -219,6 +220,7 @@ describe('a backgrounded model', () => {
               ttl: 14000,
             },
             delay: 15000,
+            priority: 1,
             group: { id: 'snazzy', priority: 1 },
           },
         )
@@ -266,7 +268,7 @@ describe('a backgrounded model', () => {
               importKey: undefined,
               method: 'classRunInBG',
             },
-            { group: { id: 'snazzy', priority: 1 } },
+            { priority: 1, group: { id: 'snazzy', priority: 1 } },
           )
         })
       })
@@ -296,6 +298,7 @@ describe('a backgrounded model', () => {
                 ttl: 14000,
               },
               delay: 15000,
+              priority: 4,
               group: { id: 'snazzy', priority: 4 },
             },
           )
@@ -363,7 +366,7 @@ describe('a backgrounded model', () => {
               id: user.id,
               method: 'instanceRunInBG',
             },
-            { group: { id: 'snazzy', priority: 3 } },
+            { priority: 3, group: { id: 'snazzy', priority: 3 } },
           )
         })
       })
@@ -395,6 +398,7 @@ describe('a backgrounded model', () => {
                 ttl: 14000,
               },
               delay: 15000,
+              priority: 4,
               group: { id: 'snazzy', priority: 4 },
             },
           )
@@ -446,6 +450,7 @@ describe('a backgrounded model', () => {
           {
             deduplication: { extend: true, id: 'myjob', replace: true, ttl: 9000 },
             delay: 10000,
+            priority: 1,
             group: { id: 'snazzy', priority: 1 },
           },
         )
@@ -475,7 +480,7 @@ describe('a backgrounded model', () => {
               id: user.id,
               method: 'instanceRunInBG',
             },
-            { delay: 9000, group: { id: 'snazzy', priority: 1 } },
+            { delay: 9000, priority: 1, group: { id: 'snazzy', priority: 1 } },
           )
         })
       })
@@ -498,6 +503,7 @@ describe('a backgrounded model', () => {
           {
             deduplication: { extend: true, id: 'myjob', replace: true, ttl: 9000 },
             delay: 10000,
+            priority: 1,
             group: { id: 'snazzy', priority: 1 },
           },
         )
@@ -527,7 +533,7 @@ describe('a backgrounded model', () => {
               id: user.id,
               method: 'instanceRunInBG',
             },
-            { delay: 9000, group: { id: 'snazzy', priority: 1 } },
+            { delay: 9000, priority: 1, group: { id: 'snazzy', priority: 1 } },
           )
         })
       })

@@ -104,40 +104,45 @@ describe('Background#queueInstance routing in native BullMQ mode', () => {
       it('writes a top-level priority when there is no group id', async () => {
         await background({ queue: 'alpha', priority: 'urgent' })
 
-        expect(queueNamed('alpha').adds[0]!.opts).toEqual({ group: undefined, priority: 1 })
-        // `toEqual` ignores undefined-valued keys on both sides, so the `group:
-        // undefined` above cannot tell "written as undefined" from "never
-        // written". The key really is written, so assert its presence outright.
-        expect(queueNamed('alpha').adds[0]!.opts).toHaveProperty('group')
+        expect(queueNamed('alpha').adds[0]!.opts).toEqual({ priority: 1 })
+        // `toEqual` ignores undefined-valued keys on both sides, so it cannot tell
+        // "written as undefined" from "never written". An ungrouped job must carry no
+        // `group` key at all, so assert its absence outright.
+        expect(queueNamed('alpha').adds[0]!.opts).not.toHaveProperty('group')
       })
 
       it('defaults to `default` priority', async () => {
         await background({ queue: 'alpha' })
 
-        expect(queueNamed('alpha').adds[0]!.opts).toEqual({ group: undefined, priority: 2 })
-        expect(queueNamed('alpha').adds[0]!.opts).toHaveProperty('group')
+        expect(queueNamed('alpha').adds[0]!.opts).toEqual({ priority: 2 })
+        expect(queueNamed('alpha').adds[0]!.opts).not.toHaveProperty('group')
       })
 
-      it('moves the priority into the group and writes no top-level priority when a group id is present', async () => {
+      it('writes the priority both at the top level and into the group when a group id is present', async () => {
         await background({ queue: 'alpha', groupId: 'alphaGroup', priority: 'not_urgent' })
 
+        // the top-level priority is the one open-source BullMQ reads; the group
+        // priority is BullMQ Pro's, and is ignored without Pro
         expect(queueNamed('alpha').adds[0]!.opts).toEqual({
+          priority: 3,
           group: { id: 'alphaGroup', priority: 3 },
         })
-        expect(queueNamed('alpha').adds[0]!.opts).not.toHaveProperty('priority')
       })
 
       it('maps `last` to 4', async () => {
         await background({ queue: 'alpha', priority: 'last' })
 
-        expect(queueNamed('alpha').adds[0]!.opts).toEqual({ group: undefined, priority: 4 })
-        expect(queueNamed('alpha').adds[0]!.opts).toHaveProperty('group')
+        expect(queueNamed('alpha').adds[0]!.opts).toEqual({ priority: 4 })
+        expect(queueNamed('alpha').adds[0]!.opts).not.toHaveProperty('group')
       })
 
-      it('treats a workstream name as the group id', async () => {
+      it('treats a workstream name as the group id, and still writes a top-level priority', async () => {
         await background({ workstream: 'alpha', priority: 'urgent' })
 
-        expect(queueNamed('alpha').adds[0]!.opts).toEqual({ group: { id: 'alpha', priority: 1 } })
+        expect(queueNamed('alpha').adds[0]!.opts).toEqual({
+          priority: 1,
+          group: { id: 'alpha', priority: 1 },
+        })
       })
     })
   })

@@ -15,7 +15,7 @@ export default class BaseBackgroundedModel extends Dream {
    * @returns {object} config - the background job config
    * @returns {string} config.priority - 'default' | 'urgent' | 'not_urgent' | 'last'
    * @returns {string} config.workstream - a workstream name. This would be the name of a workstream, as defined in conf/workers.ts
-   * @returns {string} config.queueId - the id of the BullMQ queue you wish to connect to. This can only be provided if workstream is not provided.
+   * @returns {string} config.queue - the name of the BullMQ queue you wish to connect to. This can only be provided if workstream is not provided.
    * @returns {string} config.groupId - the groupId of the BullMQ queue you wish to connect to. This can only be provided if workstream is not provided.
    */
   public static get backgroundJobConfig(): BackgroundJobConfig<BaseBackgroundedModel> {

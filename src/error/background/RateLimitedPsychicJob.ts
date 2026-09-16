@@ -35,9 +35,11 @@
  * into BullMQ's own rate-limit mechanism: the pause is logged at `warn`
  * (`[psychic-workers] pausing queue <name> for <pauseQueueForSeconds>s: a job
  * threw RateLimitedPsychicJob`), the queue is paused for that many seconds, and the job
- * goes back onto the queue (state `waiting` for a workstream job,
- * `prioritized` for a default-queue job) with `attemptsMade` unchanged and no
- * backoff, so the burst is not multiplied by the retry schedule. The check
+ * goes back onto the queue (state `prioritized`: this package writes a BullMQ
+ * priority on every job it enqueues, mapping even `'default'` to 2 rather than
+ * to BullMQ's no-priority 0, so a psychic-workers job reports `waiting` only in
+ * the two cases described below) with `attemptsMade` unchanged and no backoff,
+ * so the burst is not multiplied by the retry schedule. The check
  * reads only the worker options: a queue rate-limited solely through BullMQ's
  * `queue.setGlobalRateLimit` is treated as misconfigured (below) even though
  * its workers would honor the pause. Every worker on the queue that carries a
@@ -45,6 +47,22 @@
  * same queue — during a rolling deploy that has not yet picked up `rateLimit`,
  * say — instead re-fetches the job, runs it once more, and fails it with the
  * misconfiguration error described below.
+ *
+ * The two ways a job on one of these queues can still report
+ * `getState() === 'waiting'` are a job an application added itself through
+ * `background.queues` with no `priority`, and a job BullMQ has recovered after
+ * a stall. Stall recovery is worth knowing about: when a worker dies or loses
+ * its lock, `moveStalledJobsToWait` returns the job to the `wait` LIST
+ * unconditionally, without reading the priority it still carries — so a
+ * recovered job reports `waiting` while its `opts.priority` is unchanged, and
+ * because BullMQ drains the `wait` LIST before it reads the prioritized set,
+ * that job is fetched ahead of every prioritized job on its queue however
+ * urgent they are. The inversion is transient — it lasts until the recovered
+ * job is picked up — and it is not configurable away; `maxStalledCount` bounds
+ * how many times a single job can go around that loop. Nothing here is specific
+ * to `RateLimitedPsychicJob`; it applies to every job this package enqueues,
+ * and it is the reason an application's monitoring should not read `waiting` as
+ * proof that a job carries no priority.
  *
  * The pause replaces the queue's current limiter window and counter — the
  * configured `rateLimit` window and any earlier pause alike — so once
@@ -54,9 +72,20 @@
  * with no upper bound; concurrent throws overwrite each other (last writer wins,
  * not longest).
  *
- * Once the pause ends, the re-queued job is fetched first, ahead of every other
- * job on the queue, so a request that never clears pauses the queue again on
- * every cycle. `attemptsMade` never grows, but each re-fetch counts in BullMQ's
+ * Once the pause ends, the re-queued job is fetched first among the jobs at its
+ * own priority — not ahead of every job on the queue: a job at a higher
+ * priority still goes first — so a request that never clears pauses the queue
+ * again on every cycle. "First" there is about ordering, not latency: BullMQ
+ * pushes a job carrying a priority back from `active` with a bare sorted-set
+ * write and no marker, so unlike a priority-less job it wakes no worker that is
+ * already blocked waiting for work. A worker counting down the pause it was
+ * just given notices immediately; an idle worker on the same queue in another
+ * process may not see the job until its blocking read times out, which is
+ * bounded by BullMQ's `drainDelay` (5s by default). That is the case worth
+ * knowing for the limiter-less worker described above — it re-fetches the job,
+ * but possibly a few seconds later than the pause itself would suggest.
+ * Latency only: nothing is stranded, and the pause the job asked for usually
+ * exceeds the window anyway. `attemptsMade` never grows, but each re-fetch counts in BullMQ's
  * `attemptsStarted`, and the worker option `maxStartedAttempts`
  * (`defaultBullMQWorkerOptions: { maxStartedAttempts: 10 }`, say) is the only
  * bound: without it the cycle is unbounded. Set it on any workstream whose jobs

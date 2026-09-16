@@ -16,7 +16,7 @@ const PAUSE_QUEUE_FOR_SECONDS = 5
  * `rateLimit`, so the worker carries a `limiter`) is handed a job that throws
  * `RateLimitedPsychicJob`. BullMQ must recognize the `RateLimitError` the
  * processor throws and take its own rate-limit path: the job goes back to
- * `waiting` with no attempt counted and no `failed` event, and the queue's
+ * `prioritized` with no attempt counted and no `failed` event, and the queue's
  * limiter key is set for `pauseQueueForSeconds` seconds — rounded up, when the
  * job asks for a fraction of a second.
  *
@@ -63,7 +63,7 @@ describe('a real worker carrying a limiter, when its job throws RateLimitedPsych
     PsychicAppWorkers.getOrFail().set('testInvocation', originalTestInvocation)
   })
 
-  it('pauses the queue for pauseQueueForSeconds and puts the job back in waiting, counting no attempt and emitting no failed event', async () => {
+  it('pauses the queue for pauseQueueForSeconds and puts the job back in prioritized, counting no attempt and emitting no failed event', async () => {
     vi.spyOn(LastDummyServiceInNamedWorkstream, 'classRunInBG').mockRejectedValue(
       new RateLimitedPsychicJob({ pauseQueueForSeconds: PAUSE_QUEUE_FOR_SECONDS }),
     )
@@ -85,7 +85,10 @@ describe('a real worker carrying a limiter, when its job throws RateLimitedPsych
     await worker.processJob(job, LOCK_TOKEN, () => false)
 
     const jobAfter = (await Job.fromId(queue, job.id!))!
-    expect(await jobAfter.getState()).toEqual('waiting')
+    // `prioritized`, not `waiting`: this service's `backgroundJobConfig` sets
+    // `priority: 'last'`, which a workstream job now carries at the top level
+    // where open-source BullMQ reads it
+    expect(await jobAfter.getState()).toEqual('prioritized')
     expect(jobAfter.attemptsMade).toEqual(0)
     expect(failedEvents).toEqual([])
     expect(await queue.getFailedCount()).toEqual(0)
