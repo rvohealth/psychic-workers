@@ -246,7 +246,8 @@ export class Background {
   /**
    * Establishes connection to BullMQ via redis: builds the `Queue` objects for
    * the default and named workstreams and, only when `activateWorkers` is true,
-   * the `Worker` objects that run jobs off them.
+   * the `Worker` objects that run jobs off them. Synchronous: it returns
+   * nothing, so it is called without `await` even from async code.
    *
    * ## connecting and activating are separate
    *
