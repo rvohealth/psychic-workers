@@ -1,8 +1,27 @@
 import { Job, Queue, WorkerOptions } from 'bullmq'
+import nameToRedisQueueName from '../background/helpers/nameToRedisQueueName.js'
 import parallelTestSafeQueueName from '../background/helpers/parallelTestSafeQueueName.js'
 import background, { Background } from '../background/index.js'
 import RateLimitedPsychicJob from '../error/background/RateLimitedPsychicJob.js'
+import { RedisOrRedisClusterConnection } from '../psychic-app-workers/index.js'
 import { BackgroundJobData } from '../types/background.js'
+
+/**
+ * resolves the queue's expected Redis name through the one function that
+ * already computes it, `nameToRedisQueueName`, rather than hand-reconstructing
+ * a cluster hash tag or bare parallel-test suffix. `queue.opts.connection` is
+ * the same `Redis | Cluster` instance the queue was built with (BullMQ's
+ * `QueueBase` constructor shallow-merges opts), which is why the cast is safe
+ * for every queue this package builds with a live connection instance —
+ * scoped to the stock `bullmq` connection path; a substituted BullMQ-Pro
+ * `Queue` is an accepted, unverified risk.
+ */
+export function queueNamesMatch(queue: Queue, compareQueueName: string): boolean {
+  return (
+    queue.name ===
+    nameToRedisQueueName(compareQueueName, queue.opts.connection as RedisOrRedisClusterConnection)
+  )
+}
 
 const LOCK_TOKEN = 'psychic-test-worker'
 
@@ -46,7 +65,7 @@ export default class WorkerTestUtils {
     do {
       workWasDone = false
       for (const queue of queues) {
-        if (opts.queue && !this.queueNamesMatch(queue, opts.queue)) continue
+        if (opts.queue && !queueNamesMatch(queue, opts.queue)) continue
         workWasDone ||= await this.workOne(queue)
       }
     } while (workWasDone)
@@ -55,8 +74,9 @@ export default class WorkerTestUtils {
   public static async workScheduled(opts: TestWorkerScheduledWorkOffOpts = {}) {
     background.connect()
 
-    const queues = opts.queue
-      ? background.queues.filter(queue => queue.name === opts.queue)
+    const compareQueueName = opts.queue
+    const queues = compareQueueName
+      ? background.queues.filter(queue => queueNamesMatch(queue, compareQueueName))
       : background.queues
 
     if (opts.queue && !queues.length)
@@ -164,13 +184,6 @@ export default class WorkerTestUtils {
 
     await this.processJob(job, queue)
     return true
-  }
-
-  private static queueNamesMatch(queue: Queue, compareQueueName: string): boolean {
-    return (
-      queue.name === parallelTestSafeQueueName(compareQueueName) ||
-      queue.name === `{${parallelTestSafeQueueName(compareQueueName)}`
-    )
   }
 
   /**
