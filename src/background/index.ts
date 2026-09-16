@@ -69,6 +69,36 @@ const MINIMUM_DEDUPLICATION_DELAY_MS = 10000
 const DEDUPLICATION_KEY_MARGIN_MS = 1000
 
 /**
+ * @internal
+ *
+ * everything `connect` knows about one queue's workers at the moment it builds
+ * that queue: how the queue was configured, whether its workers carry a BullMQ
+ * `limiter`, and the three things needed to build the workers themselves later.
+ *
+ * `description` is nested rather than flattened because it is what
+ * {@link RateLimitedPsychicJobThrownFromWorkerWithoutLimiter} is handed; the
+ * worker connection must not be able to ride into an error object.
+ */
+interface QueueWorkerRecord {
+  /** how the queue was configured, as the misconfiguration message needs it */
+  description: WorkerQueueDescription
+  /** whether the workers built from `workerOptions` carry a BullMQ `limiter` */
+  hasLimiter: boolean
+  /** the very options object the workers are built from, minus the connection */
+  workerOptions: Omit<WorkerOptions, 'connection'>
+  /** the worker connection this queue's workers connect on, when one is configured */
+  workerConnection: RedisOrRedisClusterConnection | undefined
+  /**
+   * how many workers this queue was configured for. Recorded as its own field
+   * and never read back off `workerOptions`: simple mode never writes a count
+   * into the options at all, and native named mode omits it when the queue has
+   * no `namedQueueWorkers` entry, so a read-back would build one worker for
+   * every queue configured for none.
+   */
+  workerCount: number
+}
+
+/**
  * the underlying class driving the `background` singleton,
  * available as an import from `psychic-workers`.
  */
@@ -186,23 +216,47 @@ export class Background {
   /**
    * @internal
    *
-   * For every queue built by `connect`, whether the workers for that queue
-   * carry a BullMQ `limiter`, plus how the queue was configured. Computed
-   * from the same options object the workers are built from, and recorded
-   * whether or not workers are activated in this process, so that the worker
-   * processors, test invocation, and `WorkerTestUtils` all answer "may a job
-   * on this queue signal {@link RateLimitedPsychicJob}?" the same way.
+   * For every queue built by `connect`: how the queue was configured, whether
+   * the workers for that queue carry a BullMQ `limiter`, and the options,
+   * connection and count the workers themselves are built from. Computed from
+   * the same options object the workers are built from, and recorded whether or
+   * not workers are activated in this process, which makes it serve two
+   * readers. The worker processors, test invocation, and `WorkerTestUtils` read
+   * the first half, so that they all answer "may a job on this queue signal
+   * {@link RateLimitedPsychicJob}?" the same way; {@link buildRecordedWorkers}
+   * reads the second half, so that activation has everything it needs without
+   * re-walking the configuration and works just as well after `connect` has
+   * already returned.
    *
    * Keyed by Queue identity rather than name: a transitional workstream's
    * queue has the same formatted name as its current twin but its own
    * configuration.
    */
-  private queueWorkerRecords = new Map<Queue, WorkerQueueDescription & { hasLimiter: boolean }>()
+  private queueWorkerRecords = new Map<Queue, QueueWorkerRecord>()
+
+  /**
+   * @internal
+   *
+   * set immediately before {@link buildRecordedWorkers} runs its build loop, so
+   * that a second activation builds nothing and a build that throws partway is
+   * not retryable into a second copy of the workers already constructed
+   */
+  private workersActivated = false
 
   /**
    * Establishes connection to BullMQ via redis: builds the `Queue` objects for
    * the default and named workstreams and, only when `activateWorkers` is true,
    * the `Worker` objects that run jobs off them.
+   *
+   * ## connecting and activating are separate
+   *
+   * The queues are built once per instance — a repeat call finds them already
+   * built and skips that work rather than building a second generation of
+   * connections and queues. Activation is not tied to that check: every queue's
+   * worker options, worker connection and worker count are recorded as the
+   * queue is built, so a later `activateWorkers: true` — the one `work()`
+   * passes — builds the workers from that record, whether or not this instance
+   * had already connected. Workers are built once too, on the first activation.
    *
    * ## it is called for you
    *
@@ -223,30 +277,38 @@ export class Background {
    * running `work()`; `activateWorkers` is on this method's own signature, so a
    * caller can build workers directly, but nothing in this package does that
    * outside `work()`.
+   *
+   * What connecting as a producer does **not** do is foreclose becoming one
+   * later. A process that connects first and calls `work()` afterwards — a
+   * webserver that also works its own jobs, or a worker entrypoint that
+   * registers a scheduler before it calls `work()` — gets its workers from that
+   * `work()`. If that process configured no `defaultWorkerConnection`, the same
+   * `work()` now raises the missing-connection error instead of returning
+   * quietly.
    */
   public connect({
     activateWorkers = false,
   }: {
     activateWorkers?: boolean
   } = {}) {
-    if (this.defaultQueue) return
+    if (!this.defaultQueue) {
+      const psychicWorkersApp = PsychicAppWorkers.getOrFail()
+      const defaultBullMQQueueOptions = psychicWorkersApp.backgroundOptions.defaultBullMQQueueOptions || {}
 
-    const psychicWorkersApp = PsychicAppWorkers.getOrFail()
-    const defaultBullMQQueueOptions = psychicWorkersApp.backgroundOptions.defaultBullMQQueueOptions || {}
-
-    if ((psychicWorkersApp.backgroundOptions as PsychicBackgroundNativeBullMQOptions).nativeBullMQ) {
-      this.nativeBullMQConnect(
-        defaultBullMQQueueOptions,
-        psychicWorkersApp.backgroundOptions as PsychicBackgroundNativeBullMQOptions,
-        { activateWorkers },
-      )
-    } else {
-      this.simpleConnect(
-        defaultBullMQQueueOptions,
-        psychicWorkersApp.backgroundOptions as PsychicBackgroundSimpleOptions,
-        { activateWorkers },
-      )
+      if ((psychicWorkersApp.backgroundOptions as PsychicBackgroundNativeBullMQOptions).nativeBullMQ) {
+        this.nativeBullMQConnect(
+          defaultBullMQQueueOptions,
+          psychicWorkersApp.backgroundOptions as PsychicBackgroundNativeBullMQOptions,
+        )
+      } else {
+        this.simpleConnect(
+          defaultBullMQQueueOptions,
+          psychicWorkersApp.backgroundOptions as PsychicBackgroundSimpleOptions,
+        )
+      }
     }
+
+    if (activateWorkers) this.buildRecordedWorkers()
   }
 
   /**
@@ -275,7 +337,18 @@ export class Background {
   }
 
   /**
-   * Returns all the workers in your application
+   * Returns all the workers in your application: every BullMQ `Worker` this
+   * process has built, across the default queue, every named queue, and their
+   * transitional twins.
+   *
+   * Only a process that activated workers has any — `work()`, or a direct
+   * `connect({ activateWorkers: true })`. Anywhere else the getter returns an
+   * **empty array**, with no error and no warning: a producer process that only
+   * connected, a process that has not connected at all, and a process that
+   * configured a `workerCount` of zero are indistinguishable here. A worker
+   * entrypoint that attaches its failure listeners by looping over this getter
+   * therefore attaches nothing at all if it runs before `work()` does, and logs
+   * nothing to say so.
    */
   public get workers() {
     return [...this._workers]
@@ -410,12 +483,10 @@ export class Background {
     backgroundOptions: PsychicBackgroundSimpleOptions | TransitionalPsychicBackgroundSimpleOptions,
 
     {
-      activateWorkers = false,
       activatingTransitionalWorkstreams = false,
     }: {
-      activateWorkers?: boolean
       activatingTransitionalWorkstreams?: boolean
-    },
+    } = {},
   ) {
     // a partial rateLimit is a compile error, but an untyped config can still deliver one, and
     // open-source BullMQ would forward it as a limiter it does not validate, failing every job
@@ -468,26 +539,18 @@ export class Background {
       concurrency: backgroundOptions.defaultWorkstream?.concurrency || DEFAULT_CONCURRENCY,
     }
 
-    this.recordQueueWorkers(defaultQueue, defaultWorkerOptions, {
-      mode: 'simple',
-      isDefaultQueue: true,
-      configuredName: Background.defaultQueueName,
-      transitional: activatingTransitionalWorkstreams,
-    })
-
-    if (activateWorkers) {
-      if (!defaultWorkerConnection) throw new ActivatingBackgroundWorkersWithoutDefaultWorkerConnection()
-
-      const workerCount = backgroundOptions.defaultWorkstream?.workerCount ?? 1
-      for (let i = 0; i < workerCount; i++) {
-        this._workers.push(
-          new Background.Worker(formattedQueueName, this.processorFor(defaultQueue), {
-            ...defaultWorkerOptions,
-            connection: defaultWorkerConnection,
-          }),
-        )
-      }
-    }
+    this.recordQueueWorkers(
+      defaultQueue,
+      defaultWorkerOptions,
+      defaultWorkerConnection,
+      backgroundOptions.defaultWorkstream?.workerCount ?? 1,
+      {
+        mode: 'simple',
+        isDefaultQueue: true,
+        configuredName: Background.defaultQueueName,
+        transitional: activatingTransitionalWorkstreams,
+      },
+    )
     /////////////////////////////////
     // end: create default workers //
     /////////////////////////////////
@@ -543,27 +606,18 @@ export class Background {
         concurrency: namedWorkstream.concurrency || DEFAULT_CONCURRENCY,
       }
 
-      this.recordQueueWorkers(namedQueue, namedWorkerOptions, {
-        mode: 'simple',
-        isDefaultQueue: false,
-        configuredName: namedWorkstream.name,
-        transitional: activatingTransitionalWorkstreams,
-      })
-
-      if (activateWorkers) {
-        if (!namedWorkstreamWorkerConnection)
-          throw new ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection(namedWorkstream.name)
-
-        const workerCount = namedWorkstream.workerCount ?? 1
-        for (let i = 0; i < workerCount; i++) {
-          this._workers.push(
-            new Background.Worker(namedWorkstreamFormattedQueueName, this.processorFor(namedQueue), {
-              ...namedWorkerOptions,
-              connection: namedWorkstreamWorkerConnection,
-            }),
-          )
-        }
-      }
+      this.recordQueueWorkers(
+        namedQueue,
+        namedWorkerOptions,
+        namedWorkstreamWorkerConnection,
+        namedWorkstream.workerCount ?? 1,
+        {
+          mode: 'simple',
+          isDefaultQueue: false,
+          configuredName: namedWorkstream.name,
+          transitional: activatingTransitionalWorkstreams,
+        },
+      )
       ///////////////////////////////
       // end: create named workers //
       ///////////////////////////////
@@ -577,7 +631,6 @@ export class Background {
 
     if (transitionalWorkstreams) {
       this.simpleConnect(defaultBullMQQueueOptions, transitionalWorkstreams, {
-        activateWorkers,
         activatingTransitionalWorkstreams: true,
       })
     }
@@ -591,11 +644,6 @@ export class Background {
   private nativeBullMQConnect(
     defaultBullMQQueueOptions: Omit<QueueOptions, 'connection'>,
     backgroundOptions: PsychicBackgroundNativeBullMQOptions,
-    {
-      activateWorkers = false,
-    }: {
-      activateWorkers?: boolean
-    },
   ) {
     const nativeBullMQ = backgroundOptions.nativeBullMQ
     const defaultQueueConnection =
@@ -633,26 +681,18 @@ export class Background {
       ...backgroundOptions.nativeBullMQ.defaultWorkerOptions,
     }
 
-    this.recordQueueWorkers(defaultQueue, defaultWorkerOptions, {
-      mode: 'native',
-      isDefaultQueue: true,
-      configuredName: Background.defaultQueueName,
-      transitional: false,
-    })
-
-    if (activateWorkers) {
-      if (!defaultWorkerConnection) throw new ActivatingBackgroundWorkersWithoutDefaultWorkerConnection()
-
-      const workerCount = nativeBullMQ.defaultWorkerCount ?? 1
-      for (let i = 0; i < workerCount; i++) {
-        this._workers.push(
-          new Background.Worker(formattedQueueName, this.processorFor(defaultQueue), {
-            ...defaultWorkerOptions,
-            connection: defaultWorkerConnection,
-          }),
-        )
-      }
-    }
+    this.recordQueueWorkers(
+      defaultQueue,
+      defaultWorkerOptions,
+      defaultWorkerConnection,
+      nativeBullMQ.defaultWorkerCount ?? 1,
+      {
+        mode: 'native',
+        isDefaultQueue: true,
+        configuredName: Background.defaultQueueName,
+        transitional: false,
+      },
+    )
     /////////////////////////////////
     // end: create default workers //
     /////////////////////////////////
@@ -701,26 +741,12 @@ export class Background {
         ...extraWorkerOptions,
       }
 
-      this.recordQueueWorkers(namedQueue, namedWorkerOptions, {
+      this.recordQueueWorkers(namedQueue, namedWorkerOptions, namedWorkerConnection, extraWorkerCount, {
         mode: 'native',
         isDefaultQueue: false,
         configuredName: queueName,
         transitional: false,
       })
-
-      if (activateWorkers) {
-        if (!namedWorkerConnection)
-          throw new ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection(queueName)
-
-        for (let i = 0; i < extraWorkerCount; i++) {
-          this._workers.push(
-            new Background.Worker(formattedQueuename, this.processorFor(namedQueue), {
-              ...namedWorkerOptions,
-              connection: namedWorkerConnection,
-            }),
-          )
-        }
-      }
       ///////////////////////////////
       // end: create extra workers //
       ///////////////////////////////
@@ -733,18 +759,74 @@ export class Background {
   /**
    * @internal
    *
-   * records whether the workers built from `workerOptions` for `queue` carry a
-   * BullMQ `limiter`. `workerOptions` is the very object the workers are built
-   * from (minus the connection), so the record and the workers cannot disagree;
-   * it is recorded before the `activateWorkers` check so that processes which
-   * never build workers (test invocation, `WorkerTestUtils`) can still consult it.
+   * records how `queue` was configured, whether the workers built for it carry
+   * a BullMQ `limiter`, and the three things {@link buildRecordedWorkers} needs
+   * to build those workers later: `workerOptions`, `workerConnection` and
+   * `workerCount`. `workerOptions` is the very object the workers are built
+   * from (minus the connection), so the record and the workers cannot disagree.
+   *
+   * It is the sole writer of {@link queueWorkerRecords}, and it records
+   * unconditionally — whether or not this process ever activates workers — so
+   * that processes which never build any (test invocation, `WorkerTestUtils`)
+   * can still consult the limiter answer, and so that a process which activates
+   * after `connect` has returned still finds everything the build needs.
+   *
+   * `workerCount` is passed rather than read back off `workerOptions`; see the
+   * field's own TSDoc on {@link QueueWorkerRecord} for why a read-back is wrong.
    */
   private recordQueueWorkers(
     queue: Queue,
-    workerOptions: { limiter?: WorkerOptions['limiter'] | undefined },
+    workerOptions: Omit<WorkerOptions, 'connection'>,
+    workerConnection: RedisOrRedisClusterConnection | undefined,
+    workerCount: number,
     description: WorkerQueueDescription,
   ) {
-    this.queueWorkerRecords.set(queue, { ...description, hasLimiter: Boolean(workerOptions.limiter) })
+    this.queueWorkerRecords.set(queue, {
+      description,
+      hasLimiter: Boolean(workerOptions.limiter),
+      workerOptions,
+      workerConnection,
+      workerCount,
+    })
+  }
+
+  /**
+   * @internal
+   *
+   * builds every worker `connect` recorded a queue for, and is the only place
+   * inside `connect` that constructs one. Each record carries the very options
+   * object its queue's workers were always built from, so deferring the build
+   * to here reproduces the order, the count and the options of building it
+   * inline: the records are keyed by `Queue` identity in the order `connect`
+   * built the queues, and the default queue's record is always first, so the
+   * default missing-connection throw still pre-empts the named one.
+   *
+   * The activation flag is set before the loop, not after it: `_workers` is
+   * append-only, so a build that throws partway must not be retryable into a
+   * second copy of the workers it already constructed.
+   */
+  private buildRecordedWorkers() {
+    if (this.workersActivated) return
+    this.workersActivated = true
+
+    for (const [queue, record] of this.queueWorkerRecords) {
+      if (!record.workerConnection) {
+        if (record.description.isDefaultQueue)
+          throw new ActivatingBackgroundWorkersWithoutDefaultWorkerConnection()
+        throw new ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection(
+          record.description.configuredName,
+        )
+      }
+
+      for (let i = 0; i < record.workerCount; i++) {
+        this._workers.push(
+          new Background.Worker(queue.name, this.processorFor(queue), {
+            ...record.workerOptions,
+            connection: record.workerConnection,
+          }),
+        )
+      }
+    }
   }
 
   /**
@@ -806,7 +888,7 @@ export class Background {
 
     if (record.hasLimiter) return
 
-    return new RateLimitedPsychicJobThrownFromWorkerWithoutLimiter(err, record)
+    return new RateLimitedPsychicJobThrownFromWorkerWithoutLimiter(err, record.description)
   }
 
   /**
@@ -855,7 +937,20 @@ export class Background {
   }
 
   /**
-   * starts background workers
+   * starts background workers: connects if this process has not connected yet,
+   * then builds the `Worker` objects for every queue `connect` recorded, and
+   * installs the process-level fatal-error and signal handlers that shut them
+   * down.
+   *
+   * This is the one caller in this package that asks for workers, and it gets
+   * them whatever the process did first — an earlier producer-only `connect()`,
+   * from a webserver or from registering a scheduled service, no longer leaves
+   * `work()` with nothing to do. A process with no `defaultWorkerConnection`
+   * configured raises `ActivatingBackgroundWorkersWithoutDefaultWorkerConnection`
+   * here for the same reason: asking for workers that cannot connect is an
+   * error, not a quiet return. That class is not exported, so there is nothing
+   * to catch it by; the remedy is to configure a `defaultWorkerConnection` in
+   * that process, or not to call `work()` in it.
    */
   public work() {
     process.on('uncaughtException', (error: Error) => {

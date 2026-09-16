@@ -234,7 +234,10 @@ export interface PsychicBackgroundNativeBullMQOptions extends PsychicBackgroundS
      * the number of those default workers to provide, and it is the only
      * source of that count in native mode — `defaultWorkerOptions.workerCount`
      * is not read. Defaults to 1, and takes effect only in a process that
-     * connects with `activateWorkers: true`.
+     * activates workers — one that calls `background.work()`, or `connect` with
+     * `activateWorkers: true`. A process that only connects builds no workers
+     * whatever this is set to; one that connects and later calls `work()`
+     * builds this many then.
      *
      * Each of those workers runs `defaultWorkerOptions.concurrency` jobs at
      * once, which is BullMQ's default of 1 when nothing sets it, so the jobs in
@@ -356,8 +359,9 @@ export interface PsychicBackgroundWorkstreamOptions {
    *
    * ## what a "worker" is here
    *
-   * `connect({ activateWorkers: true })` loops this count constructing BullMQ
-   * `Worker` objects inside the process that called it; it forks and spawns
+   * Activating workers — `background.work()`, or `connect` with
+   * `activateWorkers: true` — loops this count constructing BullMQ `Worker`
+   * objects inside the process that activated them; it forks and spawns
    * nothing. Those workers share that one process's event loop, and the job
    * processor they are given is an inline async function rather than a
    * processor file, so BullMQ's sandboxed-process and worker-thread routes are
