@@ -57,7 +57,7 @@ export interface BackgroundJobData {
  *
  * A delay object must carry at least one of `seconds`, `minutes`, `hours` or
  * `days`. `{}` and `{ jobId: 'my-job' }` are compile errors, since a delay with
- * no duration delays nothing and a `jobId` with no duration deduplicates
+ * no duration delays nothing and a `jobId` with no duration debounces
  * nothing.
  */
 export type DelayedJobOpts = AtLeastOneDelayedJobDuration & {

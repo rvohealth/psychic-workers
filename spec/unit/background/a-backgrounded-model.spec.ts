@@ -1,6 +1,6 @@
 import { Job } from 'bullmq'
 import { MockInstance } from 'vitest'
-import DeduplicatedJobRequiresMinimumDelay from '../../../src/error/background/DeduplicatedJobRequiresMinimumDelay.js'
+import DebouncedJobRequiresMinimumDelay from '../../../src/error/background/DebouncedJobRequiresMinimumDelay.js'
 import { background } from '../../../src/package-exports/index.js'
 import PsychicAppWorkers, {
   PsychicWorkersAppTestInvocationType,
@@ -408,7 +408,7 @@ describe('a backgrounded model', () => {
   })
 
   /**
-   * The same deduplication default, reached through the model-instance entry
+   * The same debounce default, reached through the model-instance entry
    * point rather than the static one — a separate caller of `_addToQueue`. The
    * numbers themselves, the fractional clamp and the automatic-invocation
    * refusal are pinned in `a-backgrounded-service.spec.ts`.
@@ -462,7 +462,7 @@ describe('a backgrounded model', () => {
 
           await expect(
             user.backgroundWithDelay({ seconds: 2, jobId: 'myjob' }, 'instanceRunInBG', 'bottlearum'),
-          ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+          ).rejects.toThrow(DebouncedJobRequiresMinimumDelay)
 
           expect(spy).not.toHaveBeenCalled()
         })
@@ -515,7 +515,7 @@ describe('a backgrounded model', () => {
 
           await expect(
             user.backgroundWith({ delay: { seconds: 2, jobId: 'myjob' } }, 'instanceRunInBG', 'bottlearum'),
-          ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+          ).rejects.toThrow(DebouncedJobRequiresMinimumDelay)
 
           expect(spy).not.toHaveBeenCalled()
         })

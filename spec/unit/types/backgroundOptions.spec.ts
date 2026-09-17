@@ -139,7 +139,7 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
     //////////////////////////////
     // a delay object always needs a time component: a delay with no duration
     // delays nothing, and a `jobId` (the deduplication key) with no duration
-    // deduplicates nothing. `DelayedJobOpts` is narrowed to require at least
+    // debounces nothing. `DelayedJobOpts` is narrowed to require at least
     // one of `seconds`/`minutes`/`hours`/`days`, which makes both shapes
     // compile errors. The narrowing deliberately lands on `DelayedJobOpts`
     // rather than on `DelayedJobDuration`, which must stay all-optional

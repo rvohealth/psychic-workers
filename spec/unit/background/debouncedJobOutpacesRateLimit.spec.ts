@@ -1,5 +1,5 @@
 import { Redis } from 'ioredis'
-import DeduplicatedJobOutpacesRateLimit from '../../../src/error/background/DeduplicatedJobOutpacesRateLimit.js'
+import DebouncedJobOutpacesRateLimit from '../../../src/error/background/DebouncedJobOutpacesRateLimit.js'
 import { Background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
 import PsychicAppWorkersClass, {
   PsychicWorkersAppTestInvocationType,
@@ -22,7 +22,7 @@ import { fakeRedisConnection, installBullMQRecorders } from '../../helpers/bullm
  * not it activates workers. These specs deliberately call `connect()` without
  * `activateWorkers`, so they fail if that ever stops being true.
  */
-describe('a deduplicated job that outpaces its queue’s rate limit', () => {
+describe('a debounced job that outpaces its queue’s rate limit', () => {
   const bullmq = installBullMQRecorders()
 
   let queueConnection: Redis
@@ -81,7 +81,7 @@ describe('a deduplicated job that outpaces its queue’s rate limit', () => {
       // 3s delay => a 2s key, against one job every 60s
       await expect(
         enqueue(backgroundInstance, { delaySeconds: 3, jobId: 'sync-42', workstream: 'shipping' }),
-      ).rejects.toThrow(DeduplicatedJobOutpacesRateLimit)
+      ).rejects.toThrow(DebouncedJobOutpacesRateLimit)
 
       expect(bullmq.queues.flatMap(queue => queue.adds)).toEqual([])
     })
@@ -120,7 +120,7 @@ describe('a deduplicated job that outpaces its queue’s rate limit', () => {
 
       await expect(
         enqueue(backgroundInstance, { delaySeconds: 3, jobId: 'sync-42', workstream: 'shipping' }),
-      ).rejects.toThrow(DeduplicatedJobOutpacesRateLimit)
+      ).rejects.toThrow(DebouncedJobOutpacesRateLimit)
     })
   })
 
@@ -150,7 +150,7 @@ describe('a deduplicated job that outpaces its queue’s rate limit', () => {
 
       await expect(
         enqueue(backgroundInstance, { delaySeconds: 60.999, jobId: 'sync-42', workstream: 'shipping' }),
-      ).rejects.toThrow(DeduplicatedJobOutpacesRateLimit)
+      ).rejects.toThrow(DebouncedJobOutpacesRateLimit)
     })
 
     /**
@@ -183,7 +183,7 @@ describe('a deduplicated job that outpaces its queue’s rate limit', () => {
 
     /**
      * The floor is a constraint on debouncing, and so is this: a delay with no
-     * `jobId` deduplicates nothing, so there is no production rate to outrun
+     * `jobId` debounces nothing, so there is no production rate to outrun
      * the limiter with.
      */
     it('leaves a short delay carrying no jobId alone', async () => {
@@ -227,7 +227,7 @@ describe('a deduplicated job that outpaces its queue’s rate limit', () => {
 
       await expect(
         enqueue(backgroundInstance, { delaySeconds: 3, jobId: 'sync-42', workstream: 'plain' }),
-      ).rejects.toThrow(DeduplicatedJobOutpacesRateLimit)
+      ).rejects.toThrow(DebouncedJobOutpacesRateLimit)
     })
   })
 })

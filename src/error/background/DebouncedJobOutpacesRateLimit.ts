@@ -7,7 +7,7 @@ import { WorkerQueueDescription } from '../../types/background.js'
  * above the test-mode short circuit, so a consumer's test environment raises it
  * exactly as production does.
  */
-export default class DeduplicatedJobOutpacesRateLimit extends Error {
+export default class DebouncedJobOutpacesRateLimit extends Error {
   constructor(
     private jobId: string,
     private delayMs: number,

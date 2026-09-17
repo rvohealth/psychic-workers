@@ -14,7 +14,7 @@ import {
 } from 'bullmq'
 import ActivatingBackgroundWorkersWithoutDefaultWorkerConnection from '../error/background/ActivatingBackgroundWorkersWithoutDefaultWorkerConnection.js'
 import ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection from '../error/background/ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection.js'
-import DeduplicatedJobRequiresMinimumDelay from '../error/background/DeduplicatedJobRequiresMinimumDelay.js'
+import DebouncedJobRequiresMinimumDelay from '../error/background/DebouncedJobRequiresMinimumDelay.js'
 import DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
 import NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../error/background/NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
 import NamedWorkstreamRateLimitMissingMaxOrDuration from '../error/background/NamedWorkstreamRateLimitMissingMaxOrDuration.js'
@@ -35,7 +35,7 @@ import PsychicAppWorkers, {
 } from '../psychic-app-workers/index.js'
 
 import AttemtedToBackgroundEntireDreamModel from '../error/background/AttemtedToBackgroundEntireDreamModel.js'
-import DeduplicatedJobOutpacesRateLimit from '../error/background/DeduplicatedJobOutpacesRateLimit.js'
+import DebouncedJobOutpacesRateLimit from '../error/background/DebouncedJobOutpacesRateLimit.js'
 import {
   BackgroundJobConfig,
   BackgroundJobData,
@@ -52,14 +52,14 @@ const DEFAULT_CONCURRENCY = 10
 /**
  * the shortest delay a `jobId` (deduplication key) may be paired with.
  *
- * The floor is set by arithmetic against {@link DEDUPLICATION_KEY_MARGIN_MS},
+ * The floor is set by arithmetic against {@link DEBOUNCE_KEY_MARGIN_MS},
  * not by how long a worker takes to pick a job up. BullMQ rearms the key for
  * its full `ttl` on every call that replaces the pending job (`SET ... PX` in
  * `deduplicateJob.lua`, on the `replace`/`extend` path this package uses), so
  * the key's life runs from the **last** call rather than the first. A burst is
  * therefore collapsed however long it lasts, and the only thing that can split
  * it is a single gap between consecutive calls longer than the key's life —
- * which is `delay - DEDUPLICATION_KEY_MARGIN_MS`. The floor is what that
+ * which is `delay - DEBOUNCE_KEY_MARGIN_MS`. The floor is what that
  * subtraction is allowed to leave: at three seconds a burst tolerates a
  * two-second lull, twice the margin, so an ordinary round trip or pause inside
  * a burst cannot split it.
@@ -69,14 +69,14 @@ const DEFAULT_CONCURRENCY = 10
  * itself, which exists precisely to absorb noise at that scale — and at a delay
  * of one second it reaches the `Math.max(1, …)` clamp in `_addToQueue` and
  * silently degenerates to a 1ms key. Refusing below the floor is deliberate, in
- * preference to silently raising the delay or deduplicating nothing.
+ * preference to silently raising the delay or debouncing nothing.
  *
  * Three consequences of the margin, all verified against BullMQ's Lua and
  * stated nowhere else:
  *
- * - The last `DEDUPLICATION_KEY_MARGIN_MS` of every window deduplicates
- *   nothing, because the key dies before the job fires. At the floor that dead
- *   band is a third of the window; at an hour it is 0.03%. A caller whose
+ * - The last `DEBOUNCE_KEY_MARGIN_MS` of every window debounces nothing,
+ *   because the key dies before the job fires. At the floor that dead band is
+ *   a third of the window; at an hour it is 0.03%. A caller whose
  *   cadence lands inside the band degrades to no debounce at all, not to an
  *   occasional extra run. The margin is flat, so longer delays are strictly
  *   cheaper.
@@ -92,7 +92,7 @@ const DEFAULT_CONCURRENCY = 10
  *
  * The floor is a refusal, so it is cheap to lower and breaking to raise.
  */
-const MINIMUM_DEDUPLICATION_DELAY_MS = 3000
+const MINIMUM_DEBOUNCE_DELAY_MS = 3000
 
 /**
  * how far short of the delay the deduplication key's lifetime is set. The key's
@@ -103,7 +103,7 @@ const MINIMUM_DEDUPLICATION_DELAY_MS = 3000
  * breaks the debounce guarantee. That window is one round trip wide however
  * long the delay is, so the margin is flat rather than proportional.
  */
-const DEDUPLICATION_KEY_MARGIN_MS = 1000
+const DEBOUNCE_KEY_MARGIN_MS = 1000
 
 /**
  * @internal
@@ -1148,9 +1148,9 @@ export class Background {
         jobId === '' ||
         !Number.isFinite(requestedDelay) ||
         Math.abs(requestedDelay) > Number.MAX_SAFE_INTEGER ||
-        requestedDelay < MINIMUM_DEDUPLICATION_DELAY_MS
+        requestedDelay < MINIMUM_DEBOUNCE_DELAY_MS
       )
-        throw new DeduplicatedJobRequiresMinimumDelay(jobId, delaySeconds, MINIMUM_DEDUPLICATION_DELAY_MS)
+        throw new DebouncedJobRequiresMinimumDelay(jobId, delaySeconds, MINIMUM_DEBOUNCE_DELAY_MS)
 
       // a legal delay can still be too short for the queue it lands on: the key
       // lifetime is the fastest this `jobId` can produce jobs, and a limiter bounds
@@ -1163,10 +1163,10 @@ export class Background {
       // a global or native-mode limiter can be anything the type admits; a
       // cadence derived from one of those is not worth refusing a job over
       if (record && limiter && limiter.max > 0 && limiter.duration > 0 && Number.isFinite(limiter.duration)) {
-        const keyLifetime = requestedDelay - DEDUPLICATION_KEY_MARGIN_MS
+        const keyLifetime = requestedDelay - DEBOUNCE_KEY_MARGIN_MS
 
         if (keyLifetime < limiter.duration / limiter.max)
-          throw new DeduplicatedJobOutpacesRateLimit(
+          throw new DebouncedJobOutpacesRateLimit(
             jobId,
             requestedDelay,
             keyLifetime,
@@ -1211,13 +1211,13 @@ export class Background {
     if (delay && jobId) {
       jobOptions.deduplication = {
         id: jobId,
-        // deliberately shorter than the delay: see DEDUPLICATION_KEY_MARGIN_MS.
+        // deliberately shorter than the delay: see DEBOUNCE_KEY_MARGIN_MS.
         // `Math.floor` is live — Redis `SET ... PX` rejects a fractional
         // argument, and `{ seconds: 3.0005 }` is fractional. `Math.max(1, …)`
         // cannot fire at the current floor, but a `ttl <= 0` fails
         // `deduplicateJob.lua:32` and sets the deduplication key with no expiry
         // at all, so anyone lowering the floor should revisit this line first.
-        ttl: Math.max(1, Math.floor(delay - DEDUPLICATION_KEY_MARGIN_MS)),
+        ttl: Math.max(1, Math.floor(delay - DEBOUNCE_KEY_MARGIN_MS)),
         extend: true,
         replace: true,
       }

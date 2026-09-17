@@ -5,7 +5,7 @@ import PsychicAppWorkers, {
 import WorkerTestUtils from '../../../src/test-utils/WorkerTestUtils.js'
 import DummyService from '../../../test-app/src/app/services/DummyService.js'
 
-const JOB_ID = 'deduplication-key-margin-spec'
+const JOB_ID = 'debounce-key-margin-spec'
 const DELAY_SECONDS = 10
 const DELAY_MS = DELAY_SECONDS * 1000
 const MARGIN_MS = 1000
@@ -39,7 +39,7 @@ const MARGIN_MS = 1000
  * Needs Redis; runs with `testInvocation: 'manual'` so jobs are really
  * enqueued. No worker is ever started, so nothing is promoted or executed.
  */
-describe('the deduplication key, against a real Redis', () => {
+describe('the debounce key margin, against a real Redis', () => {
   let originalTestInvocation: PsychicWorkersAppTestInvocationType
 
   function defaultQueue() {

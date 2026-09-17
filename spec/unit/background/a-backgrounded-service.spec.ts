@@ -2,7 +2,7 @@ import { Job } from 'bullmq'
 import { MockInstance } from 'vitest'
 import background from '../../../src/background/index.js'
 import AttemtedToBackgroundEntireDreamModel from '../../../src/error/background/AttemtedToBackgroundEntireDreamModel.js'
-import DeduplicatedJobRequiresMinimumDelay from '../../../src/error/background/DeduplicatedJobRequiresMinimumDelay.js'
+import DebouncedJobRequiresMinimumDelay from '../../../src/error/background/DebouncedJobRequiresMinimumDelay.js'
 import PsychicAppWorkers, {
   PsychicWorkersAppTestInvocationType,
 } from '../../../src/psychic-app-workers/index.js'
@@ -397,7 +397,7 @@ describe('a backgrounded service', () => {
       })
 
       context('with a delay', () => {
-        it('delays and deduplicates the job, preserving the priority from backgroundJobConfig', async () => {
+        it('delays and debounces the job, preserving the priority from backgroundJobConfig', async () => {
           await LastDummyService.backgroundWith(
             { delay: { seconds: 15, jobId: 'myjob' } },
             'classRunInBG',
@@ -485,14 +485,14 @@ describe('a backgrounded service', () => {
   })
 
   /**
-   * The deduplication default itself: the key is armed for the delay minus a
+   * The debounce default itself: the key is armed for the delay minus a
    * flat one second margin, so that it dies before the job fires and a late
    * call starts a new timer instead of being swallowed. The margin is clamped
    * to a positive integer because BullMQ hands `ttl` straight to Redis
    * `SET ... PX`, which rejects a fractional argument.
    *
    * These pin the numbers against the recorder. What the shorter key actually
-   * buys against a real Redis is pinned in `deduplicationKeyMargin.spec.ts`.
+   * buys against a real Redis is pinned in `debounceKeyMargin.spec.ts`.
    */
   describe('deduplication (debounce) options', () => {
     context('with testInvocation manual, so the job is really enqueued', () => {
@@ -564,7 +564,7 @@ describe('a backgrounded service', () => {
          * The floor itself, from both sides. Every other spec in this file
          * sits comfortably above or below it, so this is the only thing
          * pinning where the boundary actually falls and that it is inclusive
-         * — the guard is `requestedDelay < MINIMUM_DEDUPLICATION_DELAY_MS`,
+         * — the guard is `requestedDelay < MINIMUM_DEBOUNCE_DELAY_MS`,
          * so exactly the floor is accepted.
          *
          * The `ttl` matters more than the throw, because it is the floor's
@@ -572,7 +572,7 @@ describe('a backgrounded service', () => {
          * have to arrive within to be collapsed, so 2000 here is the lull
          * between two consecutive calls that the floor tolerates. It is also
          * the headroom above the `Math.max(1, …)` clamp in `_addToQueue`,
-         * which would quietly yield a 1ms key — deduplication off — if the
+         * which would quietly yield a 1ms key — debounce off — if the
          * floor ever reached the margin. Lower the floor again and this is
          * the number to look at first.
          */
@@ -598,7 +598,7 @@ describe('a backgrounded service', () => {
                 'classRunInBG',
                 'bottlearum',
               ),
-            ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+            ).rejects.toThrow(DebouncedJobRequiresMinimumDelay)
 
             expect(spy).not.toHaveBeenCalled()
           })
@@ -612,7 +612,7 @@ describe('a backgrounded service', () => {
 
             await expect(
               DummyService.backgroundWithDelay({ seconds: 2, jobId: 'myjob' }, 'classRunInBG', 'bottlearum'),
-            ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+            ).rejects.toThrow(DebouncedJobRequiresMinimumDelay)
 
             // the legal call above is the only one that reached the queue
             expect(spy).toHaveBeenCalledTimes(1)
@@ -663,7 +663,7 @@ describe('a backgrounded service', () => {
                 'classRunInBG',
                 'bottlearum',
               ),
-            ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+            ).rejects.toThrow(DebouncedJobRequiresMinimumDelay)
 
             expect(spy).not.toHaveBeenCalled()
           })
@@ -680,7 +680,7 @@ describe('a backgrounded service', () => {
        * The guard reads the raw `delaySeconds`, above the truthiness coercion
        * that collapses 0, -0 and `NaN` into `undefined`, which is what makes
        * these reachable at all: below that line `NaN` and zero would be a
-       * delay-less enqueue carrying a `jobId` that deduplicates nothing, and
+       * delay-less enqueue carrying a `jobId` that debounces nothing, and
        * those two are what goes red if the check ever moves down.
        *
        * The clauses divide the values up: `Infinity` is the only one that
@@ -694,9 +694,9 @@ describe('a backgrounded service', () => {
         async function expectRefused(seconds: number) {
           await expect(
             DummyService.backgroundWithDelay({ seconds, jobId: 'myjob' }, 'classRunInBG', 'bottlearum'),
-          ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+          ).rejects.toThrow(DebouncedJobRequiresMinimumDelay)
 
-          // nothing was enqueued, and nothing was enqueued undeduplicated
+          // nothing was enqueued, and nothing was enqueued undebounced
           expect(spy).not.toHaveBeenCalled()
         }
 
@@ -736,10 +736,10 @@ describe('a backgrounded service', () => {
        * with no key and no signal.
        */
       context('with an empty jobId', () => {
-        it('refuses it behind a legal delay, rather than enqueuing with no deduplication', async () => {
+        it('refuses it behind a legal delay, rather than enqueuing with no debounce', async () => {
           await expect(
             DummyService.backgroundWithDelay({ seconds: 60, jobId: '' }, 'classRunInBG', 'bottlearum'),
-          ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+          ).rejects.toThrow(DebouncedJobRequiresMinimumDelay)
 
           await expect(
             DummyService.backgroundWith({ delay: { seconds: 60, jobId: '' } }, 'classRunInBG', 'bottlearum'),
@@ -773,7 +773,7 @@ describe('a backgrounded service', () => {
 
         await expect(
           DummyService.backgroundWithDelay({ seconds: 2, jobId: 'myjob' }, 'classRunInBG', 'bottlearum'),
-        ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+        ).rejects.toThrow(DebouncedJobRequiresMinimumDelay)
 
         // the job did not run in-line either: nothing happened at all
         expect(spy).not.toHaveBeenCalled()
@@ -788,7 +788,7 @@ describe('a backgrounded service', () => {
             'classRunInBG',
             'bottlearum',
           ),
-        ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+        ).rejects.toThrow(DebouncedJobRequiresMinimumDelay)
 
         expect(spy).not.toHaveBeenCalled()
       })
