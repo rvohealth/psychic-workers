@@ -147,7 +147,7 @@ export default class BaseBackgroundedModel extends Dream {
    * before making assertions.
    *
    * @param opts - options for backgrounding this job
-   * @param opts.delay - (optional) the amount of time you want to hold off before allowing the job to run, plus an optional `jobId` (a deduplication key, requiring at least ten seconds of delay) which debounces repeated calls into a single run
+   * @param opts.delay - (optional) how long you want to hold off before allowing the job to run, given as at least one of `seconds`, `minutes`, `hours` or `days`, plus an optional `jobId` (a deduplication key, requiring at least ten seconds of delay) which debounces repeated calls into a single run
    * @param opts.priority - (optional) a priority which, when provided, overrides the priority provided by `backgroundJobConfig`
    * @param methodName - the name of the static method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
@@ -295,7 +295,7 @@ export default class BaseBackgroundedModel extends Dream {
    * before making assertions.
    *
    * @param opts - options for backgrounding this job
-   * @param opts.delay - (optional) the amount of time you want to hold off before allowing the job to run, plus an optional `jobId` (a deduplication key, requiring at least ten seconds of delay) which debounces repeated calls into a single run
+   * @param opts.delay - (optional) how long you want to hold off before allowing the job to run, given as at least one of `seconds`, `minutes`, `hours` or `days`, plus an optional `jobId` (a deduplication key, requiring at least ten seconds of delay) which debounces repeated calls into a single run
    * @param opts.priority - (optional) a priority which, when provided, overrides the priority provided by `backgroundJobConfig`
    * @param methodName - the name of the instance method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
