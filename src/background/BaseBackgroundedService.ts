@@ -109,7 +109,7 @@ export default class BaseBackgroundedService {
    *
    * @deprecated use `backgroundWith({ delay }, methodName, ...args)` instead. This method will be removed in a future major version.
    *
-   * @param delay - how long you want to hold off before allowing the job to run, given as at least one of `seconds`, `minutes`, `hours` or `days`, plus an optional `jobId` (a deduplication key, requiring at least ten seconds of delay) which debounces repeated calls into a single run
+   * @param delay - how long you want to hold off before allowing the job to run, given as at least one of `seconds`, `minutes`, `hours` or `days`, plus an optional `jobId` (a deduplication key, requiring at least five seconds of delay) which debounces repeated calls into a single run
    * @param methodName - the name of the static method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
    */
@@ -141,7 +141,7 @@ export default class BaseBackgroundedService {
    * the delay has elapsed without another call arriving — that is, after the
    * last call. `jobId` is a deduplication key rather than a BullMQ job id, so
    * `queue.getJob(jobId)` will not resolve the debounced job, and a delay
-   * carrying a `jobId` must be at least ten seconds or it is refused. See
+   * carrying a `jobId` must be at least five seconds or it is refused. See
    * `DelayedJobOpts` for the premise that guarantee rests on and the cases that
    * fall outside it.
    *
@@ -164,7 +164,7 @@ export default class BaseBackgroundedService {
    * before making assertions.
    *
    * @param opts - options for backgrounding this job
-   * @param opts.delay - (optional) how long you want to hold off before allowing the job to run, given as at least one of `seconds`, `minutes`, `hours` or `days`, plus an optional `jobId` (a deduplication key, requiring at least ten seconds of delay) which debounces repeated calls into a single run
+   * @param opts.delay - (optional) how long you want to hold off before allowing the job to run, given as at least one of `seconds`, `minutes`, `hours` or `days`, plus an optional `jobId` (a deduplication key, requiring at least five seconds of delay) which debounces repeated calls into a single run
    * @param opts.priority - (optional) a priority which, when provided, overrides the priority provided by `backgroundJobConfig`
    * @param methodName - the name of the static method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method

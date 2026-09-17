@@ -86,13 +86,20 @@ export type DelayedJobOpts = AtLeastOneDelayedJobDuration & {
    * `queue.getDeduplicationJobId(jobId)`, which returns the id of the job the
    * key currently points at.
    *
-   * ## the delay must be at least ten seconds
+   * ## the delay must be at least five seconds
    *
    * A shorter delay is refused rather than accepted, and that floor is a
-   * property of the mechanism rather than an arbitrary limit: below roughly ten
-   * seconds, the time it takes a worker to promote and pick up a delayed job is
-   * the same order of magnitude as the debounce window itself, so the window
-   * stops describing anything a caller can reason about.
+   * property of the mechanism rather than an arbitrary limit: below roughly
+   * five seconds, the time it takes a worker to promote and pick up a delayed
+   * job is the same order of magnitude as the debounce window itself, so the
+   * window stops describing anything a caller can reason about.
+   *
+   * Five seconds is the floor, not a recommendation. It is where the window
+   * stops being meaningless, and the section below on the dead band is the
+   * reason to sit well above it: at the floor a fifth of the window
+   * deduplicates nothing, and a queue whose workers are rate limited, paused
+   * or saturated can stall promotion for longer than the whole window, at
+   * which point every call becomes its own job.
    *
    * ## the guarantee has a premise, and there is no knob
    *
@@ -139,15 +146,15 @@ export type DelayedJobOpts = AtLeastOneDelayedJobDuration & {
    *
    * The margin has a cost, and it is the largest behavioural consequence of the
    * mechanism: because the key dies one second before the job fires, the last
-   * second of every window deduplicates nothing. At the ten-second floor that
-   * is 10% of the window; at an hour it is 0.03%.
+   * second of every window deduplicates nothing. At the five-second floor that
+   * is 20% of the window; at an hour it is 0.03%.
    *
    * A caller whose cadence happens to land inside that band degrades from a
    * debounce to **no debounce at all**, not merely to an occasional extra run.
-   * With `{ seconds: 10 }`: a call at 0.0 arms a key that expires at 9.0 for a
-   * job due at 10.0; a call at 9.5 finds no key and starts a second job, due at
-   * 19.5, while the first still runs at 10.0; a call at 19.0 does it again. Every
-   * call produces a run.
+   * With `{ seconds: 5 }` — the floor, where the band is widest: a call at 0.0
+   * arms a key that expires at 4.0 for a job due at 5.0; a call at 4.5 finds no
+   * key and starts a second job, due at 9.5, while the first still runs at 5.0;
+   * a call at 9.0 does it again. Every call produces a run.
    *
    * The lever is the delay. The margin is a flat second, so **longer delays are
    * strictly cheaper**: the dead band is a fixed width and shrinks as a fraction
@@ -227,7 +234,7 @@ export interface BackgroundWithOpts {
    * carrying the same `jobId` collapse into a single execution, which runs
    * once the delay has elapsed without another call arriving. `jobId` is a
    * deduplication key rather than a BullMQ job id, and a delay carrying one
-   * must be at least ten seconds. See `DelayedJobOpts` for the full contract.
+   * must be at least five seconds. See `DelayedJobOpts` for the full contract.
    */
   delay?: DelayedJobOpts
 

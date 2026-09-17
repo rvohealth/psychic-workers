@@ -7,7 +7,7 @@
  * A `jobId` debounces: BullMQ holds a deduplication key for the life of the
  * delay and swallows repeat calls that land while it is live. That is only
  * meaningful when the delay is long enough to outlast the time it takes a
- * worker to pick a job up, so this package requires at least ten seconds.
+ * worker to pick a job up, so this package requires at least five seconds.
  * Anything shorter — and zero, negative, `Infinity`, `NaN`, or a magnitude past
  * `Number.MAX_SAFE_INTEGER` — is refused here rather than quietly enqueued with
  * no deduplication at all, or forwarded to Redis `SET ... PX`, which rejects a

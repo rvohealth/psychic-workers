@@ -54,8 +54,16 @@ const DEFAULT_CONCURRENCY = 10
  * this, a debounce window is no longer meaningfully longer than the time it
  * takes a worker to pick a job up, so `_addToQueue` refuses it rather than
  * silently raising the delay or deduplicating nothing.
+ *
+ * The floor is a refusal, so it is cheap to lower and breaking to raise: it
+ * is deliberately set at the shortest window that still describes something a
+ * caller can reason about, not at the shortest that works. Its cost is paid
+ * against {@link DEDUPLICATION_KEY_MARGIN_MS}, which is flat — at this floor
+ * the last second of the window deduplicates nothing, which is a fifth of it.
+ * Callers who care about collapsing should widen the delay rather than sit at
+ * the floor; that trade is spelled out on `DelayedJobOpts`.
  */
-const MINIMUM_DEDUPLICATION_DELAY_MS = 10000
+const MINIMUM_DEDUPLICATION_DELAY_MS = 5000
 
 /**
  * how far short of the delay the deduplication key's lifetime is set. The key's
@@ -1312,12 +1320,12 @@ export class Background {
         //
         // `Math.floor` is live: BullMQ hands this straight to Redis
         // `SET ... PX`, which rejects a fractional argument, and a duration
-        // built from e.g. `{ seconds: 10.0005 }` is fractional.
+        // built from e.g. `{ seconds: 5.0005 }` is fractional.
         //
         // `Math.max(1, …)` is belt-and-braces and cannot currently fire. The
         // guard above has already refused any `jobId` under
         // MINIMUM_DEDUPLICATION_DELAY_MS, so `delay - DEDUPLICATION_KEY_MARGIN_MS`
-        // is at least 9000 on every path into here. It is kept because it is
+        // is at least 4000 on every path into here. It is kept because it is
         // the coupling that is easy to miss: if the floor is ever lowered to
         // within a second of the margin, this clamp would turn an illegal
         // lifetime into a 1ms key — deduplication silently off — rather than an

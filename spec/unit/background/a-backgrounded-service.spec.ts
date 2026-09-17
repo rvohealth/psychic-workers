@@ -560,14 +560,53 @@ describe('a backgrounded service', () => {
           })
         })
 
-        context('with a delay under ten seconds', () => {
+        /**
+         * The floor itself, from both sides. Every other spec in this file
+         * sits comfortably above or below it, so this is the only thing
+         * pinning where the boundary actually falls and that it is inclusive
+         * — the guard is `requestedDelay < MINIMUM_DEDUPLICATION_DELAY_MS`,
+         * so exactly the floor is accepted. The `ttl` matters as much as the
+         * throw: at the floor the flat one-second margin leaves 4000, which
+         * is what keeps the `Math.max(1, …)` clamp in `_addToQueue`
+         * unreachable. If the floor is ever lowered again, this is the
+         * assertion that says how much room is left.
+         */
+        context('at the five-second floor exactly', () => {
+          it('accepts the delay and arms the key for the floor minus the margin', async () => {
+            await DummyService.backgroundWithDelay(
+              { seconds: 5, jobId: 'myjob' },
+              'classRunInBG',
+              'bottlearum',
+            )
+
+            expectAddedToQueue({
+              deduplication: { extend: true, id: 'myjob', replace: true, ttl: 4000 },
+              delay: 5000,
+              priority: 2,
+            })
+          })
+
+          it('refuses a delay a hair under it', async () => {
+            await expect(
+              DummyService.backgroundWithDelay(
+                { seconds: 4.999, jobId: 'myjob' },
+                'classRunInBG',
+                'bottlearum',
+              ),
+            ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
+
+            expect(spy).not.toHaveBeenCalled()
+          })
+        })
+
+        context('with a delay under five seconds', () => {
           it('throws when a jobId is present, enqueuing nothing', async () => {
             await expect(
-              DummyService.backgroundWithDelay({ seconds: 9 }, 'classRunInBG', 'bottlearum'),
+              DummyService.backgroundWithDelay({ seconds: 4 }, 'classRunInBG', 'bottlearum'),
             ).resolves.not.toThrow()
 
             await expect(
-              DummyService.backgroundWithDelay({ seconds: 9, jobId: 'myjob' }, 'classRunInBG', 'bottlearum'),
+              DummyService.backgroundWithDelay({ seconds: 4, jobId: 'myjob' }, 'classRunInBG', 'bottlearum'),
             ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
 
             // the legal call above is the only one that reached the queue
@@ -575,9 +614,9 @@ describe('a backgrounded service', () => {
           })
 
           it('enqueues the same short delay when no jobId is present', async () => {
-            await DummyService.backgroundWithDelay({ seconds: 9 }, 'classRunInBG', 'bottlearum')
+            await DummyService.backgroundWithDelay({ seconds: 4 }, 'classRunInBG', 'bottlearum')
 
-            expectAddedToQueue({ delay: 9000, priority: 2 })
+            expectAddedToQueue({ delay: 4000, priority: 2 })
           })
         })
       })
@@ -611,11 +650,11 @@ describe('a backgrounded service', () => {
           })
         })
 
-        context('with a delay under ten seconds', () => {
+        context('with a delay under five seconds', () => {
           it('throws when a jobId is present, enqueuing nothing', async () => {
             await expect(
               DummyService.backgroundWith(
-                { delay: { seconds: 9, jobId: 'myjob' } },
+                { delay: { seconds: 4, jobId: 'myjob' } },
                 'classRunInBG',
                 'bottlearum',
               ),
@@ -625,9 +664,9 @@ describe('a backgrounded service', () => {
           })
 
           it('enqueues the same short delay when no jobId is present', async () => {
-            await DummyService.backgroundWith({ delay: { seconds: 9 } }, 'classRunInBG', 'bottlearum')
+            await DummyService.backgroundWith({ delay: { seconds: 4 } }, 'classRunInBG', 'bottlearum')
 
-            expectAddedToQueue({ delay: 9000, priority: 2 })
+            expectAddedToQueue({ delay: 4000, priority: 2 })
           })
         })
       })
@@ -724,23 +763,23 @@ describe('a backgrounded service', () => {
         expect(PsychicAppWorkers.getOrFail().testInvocation).toEqual('automatic')
       })
 
-      it('refuses a jobId behind a delay under ten seconds from backgroundWithDelay', async () => {
+      it('refuses a jobId behind a delay under five seconds from backgroundWithDelay', async () => {
         const spy = vi.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
 
         await expect(
-          DummyService.backgroundWithDelay({ seconds: 9, jobId: 'myjob' }, 'classRunInBG', 'bottlearum'),
+          DummyService.backgroundWithDelay({ seconds: 4, jobId: 'myjob' }, 'classRunInBG', 'bottlearum'),
         ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
 
         // the job did not run in-line either: nothing happened at all
         expect(spy).not.toHaveBeenCalled()
       })
 
-      it('refuses a jobId behind a delay under ten seconds from backgroundWith', async () => {
+      it('refuses a jobId behind a delay under five seconds from backgroundWith', async () => {
         const spy = vi.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
 
         await expect(
           DummyService.backgroundWith(
-            { delay: { seconds: 9, jobId: 'myjob' } },
+            { delay: { seconds: 4, jobId: 'myjob' } },
             'classRunInBG',
             'bottlearum',
           ),
@@ -752,7 +791,7 @@ describe('a backgrounded service', () => {
       it('still runs a short delay that carries no jobId', async () => {
         const spy = vi.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
 
-        await DummyService.backgroundWithDelay({ seconds: 9 }, 'classRunInBG', 'bottlearum')
+        await DummyService.backgroundWithDelay({ seconds: 4 }, 'classRunInBG', 'bottlearum')
 
         expect(spy).toHaveBeenCalledWith('bottlearum', expect.any(Job))
       })
