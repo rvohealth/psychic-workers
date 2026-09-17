@@ -197,6 +197,12 @@ export default class WorkerTestUtils {
       }
 
       if (err instanceof RateLimitedPsychicJob) {
+        // exactly what a real worker does with this signal: BullMQ's own rate-limit
+        // path is `job.moveToWait(token)` (`Worker#moveLimitedBackToWait`). It takes
+        // the job off `active` and releases the lock `workOne` took, without counting
+        // an attempt. Its Lua reads the job's own priority and puts a prioritized job
+        // back in `prioritized` rather than `wait`, so the destination matches
+        // production too — this package writes a priority on every job it enqueues.
         await job.moveToWait(LOCK_TOKEN)
         throw err
       }
