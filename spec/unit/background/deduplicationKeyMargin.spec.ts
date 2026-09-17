@@ -26,14 +26,15 @@ const MARGIN_MS = 1000
  *    the floor.
  *
  * The key's disappearance is induced with `queue.removeDeduplicationKey`
- * rather than waited out. Sleeping is not an option: the landing zone is the
- * 1000 ms between the key's expiry and the job's due time — 4000 ms in even at
- * the shortest legal delay, which vitest's default 5000 ms timeout does not
- * reliably clear once setup is counted — and nothing in this harness
- * promotes delayed jobs anyway (`promoteDelayedJobs` runs inside
- * `moveToActive`), so an early wake would pass for the wrong reason.
- * `removeDeduplicationKey` puts Redis in exactly the state an expiry leaves it
- * in: the key is simply not there.
+ * rather than waited out. Sleeping would prove nothing here: nothing in this
+ * harness promotes delayed jobs (`promoteDelayedJobs` runs inside
+ * `moveToActive`, and no worker is started), so a sleep that woke in the
+ * landing zone would pass for the wrong reason — the job it found unfired
+ * would be unfired because no one was promoting, not because the margin held.
+ * It would also be a multi-second sleep racing a 1000 ms window, which is a
+ * flake waiting to happen whatever the delay.  `removeDeduplicationKey` puts
+ * Redis in exactly the state an expiry leaves it in: the key is simply not
+ * there.
  *
  * Needs Redis; runs with `testInvocation: 'manual'` so jobs are really
  * enqueued. No worker is ever started, so nothing is promoted or executed.

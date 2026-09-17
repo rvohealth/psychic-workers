@@ -456,12 +456,12 @@ describe('a backgrounded model', () => {
         )
       })
 
-      context('with a delay under five seconds', () => {
+      context('with a delay under three seconds', () => {
         it('throws when a jobId is present, enqueuing nothing', async () => {
           const user = await User.create({ email: 'a@b.com' })
 
           await expect(
-            user.backgroundWithDelay({ seconds: 4, jobId: 'myjob' }, 'instanceRunInBG', 'bottlearum'),
+            user.backgroundWithDelay({ seconds: 2, jobId: 'myjob' }, 'instanceRunInBG', 'bottlearum'),
           ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
 
           expect(spy).not.toHaveBeenCalled()
@@ -470,7 +470,7 @@ describe('a backgrounded model', () => {
         it('enqueues the same short delay when no jobId is present', async () => {
           const user = await User.create({ email: 'a@b.com' })
 
-          await user.backgroundWithDelay({ seconds: 4 }, 'instanceRunInBG', 'bottlearum')
+          await user.backgroundWithDelay({ seconds: 2 }, 'instanceRunInBG', 'bottlearum')
 
           expect(spy).toHaveBeenCalledWith(
             'BackgroundJobQueueModelInstanceJob',
@@ -480,7 +480,7 @@ describe('a backgrounded model', () => {
               id: user.id,
               method: 'instanceRunInBG',
             },
-            { delay: 4000, priority: 1, group: { id: 'snazzy', priority: 1 } },
+            { delay: 2000, priority: 1, group: { id: 'snazzy', priority: 1 } },
           )
         })
       })
@@ -509,12 +509,12 @@ describe('a backgrounded model', () => {
         )
       })
 
-      context('with a delay under five seconds', () => {
+      context('with a delay under three seconds', () => {
         it('throws when a jobId is present, enqueuing nothing', async () => {
           const user = await User.create({ email: 'a@b.com' })
 
           await expect(
-            user.backgroundWith({ delay: { seconds: 4, jobId: 'myjob' } }, 'instanceRunInBG', 'bottlearum'),
+            user.backgroundWith({ delay: { seconds: 2, jobId: 'myjob' } }, 'instanceRunInBG', 'bottlearum'),
           ).rejects.toThrow(DeduplicatedJobRequiresMinimumDelay)
 
           expect(spy).not.toHaveBeenCalled()
@@ -523,7 +523,7 @@ describe('a backgrounded model', () => {
         it('enqueues the same short delay when no jobId is present', async () => {
           const user = await User.create({ email: 'a@b.com' })
 
-          await user.backgroundWith({ delay: { seconds: 4 } }, 'instanceRunInBG', 'bottlearum')
+          await user.backgroundWith({ delay: { seconds: 2 } }, 'instanceRunInBG', 'bottlearum')
 
           expect(spy).toHaveBeenCalledWith(
             'BackgroundJobQueueModelInstanceJob',
@@ -533,7 +533,7 @@ describe('a backgrounded model', () => {
               id: user.id,
               method: 'instanceRunInBG',
             },
-            { delay: 4000, priority: 1, group: { id: 'snazzy', priority: 1 } },
+            { delay: 2000, priority: 1, group: { id: 'snazzy', priority: 1 } },
           )
         })
       })

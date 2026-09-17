@@ -86,20 +86,45 @@ export type DelayedJobOpts = AtLeastOneDelayedJobDuration & {
    * `queue.getDeduplicationJobId(jobId)`, which returns the id of the job the
    * key currently points at.
    *
-   * ## the delay must be at least five seconds
+   * ## what a burst costs, and why the delay must be at least three seconds
    *
-   * A shorter delay is refused rather than accepted, and that floor is a
-   * property of the mechanism rather than an arbitrary limit: below roughly
-   * five seconds, the time it takes a worker to promote and pick up a delayed
-   * job is the same order of magnitude as the debounce window itself, so the
-   * window stops describing anything a caller can reason about.
+   * Every call that replaces the pending job also rearms the key for its full
+   * lifetime, so **the window runs from the last call, not the first**, and a
+   * burst is collapsed however long it lasts. Ten thousand calls over two
+   * minutes produce one run, three seconds after the last of them, exactly as
+   * three calls over 50ms do. Burst length is not what the floor is about.
    *
-   * Five seconds is the floor, not a recommendation. It is where the window
-   * stops being meaningless, and the section below on the dead band is the
-   * reason to sit well above it: at the floor a fifth of the window
-   * deduplicates nothing, and a queue whose workers are rate limited, paused
-   * or saturated can stall promotion for longer than the whole window, at
-   * which point every call becomes its own job.
+   * What can split a burst is a single **gap between two consecutive calls**
+   * longer than the key's life — and the key's life is the delay minus the one
+   * second below. That subtraction is the whole of the floor:
+   *
+   * | delay | key lives | tolerates a lull of | runs after the last call |
+   * | ----- | --------- | ------------------- | ------------------------ |
+   * | 1h    | 59m 59s   | 59m 59s             | 1h                       |
+   * | 10s   | 9s        | 9s                  | 10s                      |
+   * | 3s    | 2s        | 2s                  | 3s                       |
+   * | 2s    | 1s        | 1s                  | 2s                       |
+   * | 1s    | *(1ms)*   | nothing             | 1s                       |
+   *
+   * Three seconds is where that subtraction still leaves something usable: a
+   * two-second tolerance, twice the margin, so an ordinary Redis round trip,
+   * a batch boundary or a GC pause inside a burst cannot split it. At two
+   * seconds the tolerance is one second — the same figure as the margin, which
+   * exists precisely because one second is the scale at which this system's
+   * own infrastructure noise lives, so anything the margin was sized to absorb
+   * would also split the burst. At one second the delay has been eaten
+   * entirely: the `Math.max(1, …)` clamp yields a 1ms key and deduplication is
+   * silently off, which is what the floor exists to make unreachable.
+   *
+   * Two things the floor does **not** buy, both worth sizing a delay against:
+   *
+   * - **The delay is not the latency.** The job becomes *due* one delay after
+   *   the last call; a worker still has to promote and pick it up. On a rate
+   *   limited workstream that pickup is bounded by the limiter, not by this.
+   * - **A stall is not collapsed.** Once the key has expired, a queue whose
+   *   workers are rate limited, paused or saturated turns every further call
+   *   into its own delayed job, for as long as the stall lasts. Shorter delays
+   *   reach that state sooner.
    *
    * ## the guarantee has a premise, and there is no knob
    *
@@ -146,15 +171,17 @@ export type DelayedJobOpts = AtLeastOneDelayedJobDuration & {
    *
    * The margin has a cost, and it is the largest behavioural consequence of the
    * mechanism: because the key dies one second before the job fires, the last
-   * second of every window deduplicates nothing. At the five-second floor that
-   * is 20% of the window; at an hour it is 0.03%.
+   * second of every window deduplicates nothing. At the three-second floor that
+   * is a third of the window; at an hour it is 0.03%.
    *
    * A caller whose cadence happens to land inside that band degrades from a
    * debounce to **no debounce at all**, not merely to an occasional extra run.
-   * With `{ seconds: 5 }` — the floor, where the band is widest: a call at 0.0
-   * arms a key that expires at 4.0 for a job due at 5.0; a call at 4.5 finds no
-   * key and starts a second job, due at 9.5, while the first still runs at 5.0;
-   * a call at 9.0 does it again. Every call produces a run.
+   * With `{ seconds: 3 }` — the floor, where the band is widest: a call at 0.0
+   * arms a key that expires at 2.0 for a job due at 3.0; a call at 2.5 finds no
+   * key and starts a second job, due at 5.5, while the first still runs at 3.0;
+   * a call at 5.0 does it again. Every call produces a run. Note the cadence
+   * that does this — one call every 2.5 seconds — is a slow trickle, not a
+   * burst: a burst's calls land far inside the key's life and collapse.
    *
    * The lever is the delay. The margin is a flat second, so **longer delays are
    * strictly cheaper**: the dead band is a fixed width and shrinks as a fraction
@@ -234,7 +261,7 @@ export interface BackgroundWithOpts {
    * carrying the same `jobId` collapse into a single execution, which runs
    * once the delay has elapsed without another call arriving. `jobId` is a
    * deduplication key rather than a BullMQ job id, and a delay carrying one
-   * must be at least five seconds. See `DelayedJobOpts` for the full contract.
+   * must be at least three seconds. See `DelayedJobOpts` for the full contract.
    */
   delay?: DelayedJobOpts
 
