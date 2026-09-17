@@ -13,6 +13,11 @@ openapi.json
 admin.openapi.json
 pnpm-lock.yaml
 
+# Hidden from git by .git/info/exclude, which prettier does not read,
+# so it has to be told about them separately
+plans/
+.pnpm-store/
+
 client/eslint.config.js
 client/tsconfig.json
 

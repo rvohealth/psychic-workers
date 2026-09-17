@@ -223,6 +223,31 @@ describe('Background#nativeBullMQConnect', () => {
     })
   })
 
+  context('named queue workers', () => {
+    it('builds no workers for a named queue with no namedQueueWorkers entry', () => {
+      const backgroundInstance = connectNative(
+        {
+          nativeBullMQ: { namedQueueOptions: { alpha: {} } },
+          defaultQueueConnection: queueConnection,
+          defaultWorkerConnection: workerConnection,
+        },
+        { activateWorkers: true },
+      )
+
+      expect(backgroundInstance.queues.length).toEqual(2)
+
+      // `alpha` has no `namedQueueWorkers` entry, so its configured worker count
+      // is 0. The only worker built is the default queue's. This is the fence
+      // against reading a worker count back off the worker options object, where
+      // the absent key would read as `undefined ?? 1` and give every such queue a
+      // worker the application deliberately did not ask for
+      expect(bullmq.workers.length).toEqual(1)
+      expect(bullmq.workers[0]!.queueName).toEqual(
+        nameToRedisQueueName(Background.defaultQueueName, queueConnection),
+      )
+    })
+  })
+
   context('connection resolution', () => {
     it('prefers nativeBullMQ.defaultQueueOptions.queueConnection over defaultQueueConnection', () => {
       const preferredConnection = fakeRedisConnection('preferred')
@@ -366,6 +391,24 @@ describe('Background#nativeBullMQConnect', () => {
           connectNative({ nativeBullMQ: {}, defaultQueueConnection: queueConnection }),
         ).not.toThrow()
       })
+
+      it('throws on a later activating connect, not on the producer-only connect before it', () => {
+        // `defaultWorkerCount: 0` on purpose: the connection check has to precede
+        // the count, so a process that configured no workers still learns that it
+        // has no worker connection rather than silently building nothing
+        let backgroundInstance!: Background
+
+        expect(() => {
+          backgroundInstance = connectNative({
+            nativeBullMQ: { defaultWorkerCount: 0 },
+            defaultQueueConnection: queueConnection,
+          })
+        }).not.toThrow()
+
+        expect(() => backgroundInstance.connect({ activateWorkers: true })).toThrow(
+          ActivatingBackgroundWorkersWithoutDefaultWorkerConnection,
+        )
+      })
     })
 
     context('a named queue with no connections of its own', () => {
@@ -373,8 +416,10 @@ describe('Background#nativeBullMQConnect', () => {
         // NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection and
         // ActivatingNamedQueueBackgroundWorkersWithoutWorkerConnection can only be
         // reached when the corresponding default connection is missing -- but in that
-        // case the default-queue/default-worker check has already thrown, so in native
-        // mode neither named-queue error is reachable
+        // case the default-queue/default-worker check has already thrown: the queue
+        // check runs before any named queue is built, and the deferred worker build
+        // walks the recorded queues with the default's record first. So in native mode
+        // neither named-queue error is reachable
         const backgroundInstance = connectNative(
           {
             nativeBullMQ: {
@@ -408,6 +453,41 @@ describe('Background#nativeBullMQConnect', () => {
       backgroundInstance.connect()
 
       expect(backgroundInstance.queues.length).toEqual(1)
+    })
+
+    it('builds the workers on a later activating connect, having built none on the first', () => {
+      const backgroundInstance = connectNative({
+        nativeBullMQ: { defaultWorkerCount: 3 },
+        defaultQueueConnection: queueConnection,
+        defaultWorkerConnection: workerConnection,
+      })
+
+      // the precondition this example turns on: connecting as a producer builds
+      // the queue and no workers
+      expect(backgroundInstance.workers.length).toEqual(0)
+      expect(bullmq.workers.length).toEqual(0)
+
+      backgroundInstance.connect({ activateWorkers: true })
+
+      const defaultQueueName = nameToRedisQueueName(Background.defaultQueueName, queueConnection)
+      expect(bullmq.workers.length).toEqual(3)
+      expect(backgroundInstance.workers.length).toEqual(3)
+      expect(bullmq.workers.map(worker => worker.queueName)).toEqual([
+        defaultQueueName,
+        defaultQueueName,
+        defaultQueueName,
+      ])
+
+      // ...and the already-connected guard still holds: activating a second time
+      // built no second generation of queues or redis connections. Deleting the
+      // guard to make the workers appear would fail here
+      expect(backgroundInstance.queues.length).toEqual(1)
+      expect(bullmq.queues.length).toEqual(1)
+      expect(
+        (backgroundInstance as unknown as { redisConnections: { __label: string }[] }).redisConnections.map(
+          connection => connection.__label,
+        ),
+      ).toEqual(['queue', 'worker'])
     })
   })
 })

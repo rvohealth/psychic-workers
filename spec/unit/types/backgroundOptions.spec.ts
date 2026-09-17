@@ -1,5 +1,9 @@
 import { Redis } from 'ioredis'
-import { BackgroundJobConfig, PsychicBackgroundOptions } from '../../../src/types/background.js'
+import {
+  BackgroundJobConfig,
+  BackgroundWithOpts,
+  PsychicBackgroundOptions,
+} from '../../../src/types/background.js'
 import DummyService from '../../../test-app/src/app/services/DummyService.js'
 import { fakeRedisConnection, nativeWorkerOptions } from '../../helpers/bullmqRecorders.js'
 
@@ -47,6 +51,30 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
     // @ts-expect-error simple mode requires the defaultWorkerConnection key to be present
     const simpleMissingWorkerConnectionKey: PsychicBackgroundOptions = {
       defaultQueueConnection: connection,
+    }
+
+    // a named workstream's `rateLimit` is optional, but when present both
+    // `max` and `duration` are required: open-source BullMQ passes them
+    // unvalidated into its Lua scripts, where a missing `duration` breaks the
+    // job fetch, so a partial rate limit is rejected at compile time instead
+    const rateLimitedWorkstream: PsychicBackgroundOptions = {
+      defaultQueueConnection: connection,
+      defaultWorkerConnection: connection,
+      namedWorkstreams: [{ name: 'snazzy', rateLimit: { max: 1, duration: 1000 } }],
+    }
+
+    const rateLimitMissingDuration: PsychicBackgroundOptions = {
+      defaultQueueConnection: connection,
+      defaultWorkerConnection: connection,
+      // @ts-expect-error rateLimit requires duration alongside max
+      namedWorkstreams: [{ name: 'snazzy', rateLimit: { max: 1 } }],
+    }
+
+    const rateLimitMissingMax: PsychicBackgroundOptions = {
+      defaultQueueConnection: connection,
+      defaultWorkerConnection: connection,
+      // @ts-expect-error rateLimit requires max alongside duration
+      namedWorkstreams: [{ name: 'snazzy', rateLimit: { duration: 1000 } }],
     }
 
     ///////////////////////
@@ -106,6 +134,39 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       nativeBullMQ: {},
     }
 
+    //////////////////////////////
+    // delay options (debounce) //
+    //////////////////////////////
+    // a delay object always needs a time component: a delay with no duration
+    // delays nothing, and a `jobId` (the deduplication key) with no duration
+    // debounces nothing. `DelayedJobOpts` is narrowed to require at least
+    // one of `seconds`/`minutes`/`hours`/`days`, which makes both shapes
+    // compile errors. The narrowing deliberately lands on `DelayedJobOpts`
+    // rather than on `DelayedJobDuration`, which must stay all-optional
+    // because `durationToSeconds` takes it.
+    const delayWithDuration: BackgroundWithOpts = { delay: { seconds: 10, jobId: 'x' } }
+    const delayWithDurationOnly: BackgroundWithOpts = { delay: { minutes: 1 } }
+
+    const delayWithoutDuration: BackgroundWithOpts = {
+      // @ts-expect-error a delay must carry at least one time component
+      delay: {},
+    }
+
+    const delayWithJobIdOnly: BackgroundWithOpts = {
+      // @ts-expect-error a jobId is not a time component; a delay still needs one
+      delay: { jobId: 'x' },
+    }
+
+    // never invoked — declared only so the compiler checks the call signature
+    // of `backgroundWithDelay`, which takes a `DelayedJobOpts` directly
+    const backgroundWithDelayCallSignature = async () => {
+      await DummyService.backgroundWithDelay({ seconds: 10, jobId: 'x' }, 'classRunInBG', 'bottlearum')
+      // @ts-expect-error a delay must carry at least one time component
+      await DummyService.backgroundWithDelay({}, 'classRunInBG', 'bottlearum')
+      // @ts-expect-error a jobId is not a time component; a delay still needs one
+      await DummyService.backgroundWithDelay({ jobId: 'x' }, 'classRunInBG', 'bottlearum')
+    }
+
     ////////////////////////
     // BackgroundJobConfig //
     ////////////////////////
@@ -132,15 +193,23 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       simpleWithoutWorkers,
       simpleMissingQueueConnection,
       simpleMissingWorkerConnectionKey,
+      rateLimitedWorkstream,
+      rateLimitMissingDuration,
+      rateLimitMissingMax,
       native,
       nativeWorkersWithoutConnection,
       nativePlusWorkstreams,
       nativePlusDefaultWorkstream,
       simplePlusNative,
+      delayWithDuration,
+      delayWithDurationOnly,
+      delayWithoutDuration,
+      delayWithJobIdOnly,
+      backgroundWithDelayCallSignature,
       workstreamJobConfig,
       priorityOnlyJobConfig,
       unknownWorkstreamJobConfig,
       mixedJobConfig,
-    ]).toHaveLength(13)
+    ]).toHaveLength(21)
   })
 })

@@ -40,14 +40,75 @@ export interface BackgroundJobData {
   globalName?: string
 }
 
-export type DelayedJobOpts = DelayedJobDuration & {
+/**
+ * the delay to hold a job for and, when a `jobId` is provided, the debounce
+ * that delay drives.
+ *
+ * Calling a delayed background method repeatedly with the same `jobId`
+ * collapses those calls into a **single execution**. Each call slides the
+ * pending job's fire time further out, and the job runs once, after the last
+ * call, when the delay has finally elapsed without another call arriving.
+ *
+ * ```ts
+ * // ten calls in quick succession; the report is generated once,
+ * // ten seconds after the last of them
+ * await Report.backgroundWith({ delay: { seconds: 10, jobId: `report-${user.id}` } }, 'generate', user.id)
+ * ```
+ *
+ * A delay object must carry at least one of `seconds`, `minutes`, `hours` or
+ * `days`. `{}` and `{ jobId: 'my-job' }` are compile errors, since a delay with
+ * no duration delays nothing and a `jobId` with no duration debounces
+ * nothing.
+ */
+export type DelayedJobOpts = AtLeastOneDelayedJobDuration & {
   /**
-   * a unique identifier for your job. this identifier will be
-   * used to debounce, leveraging the internal throttling mechanisms
-   * provided by BullMQ
+   * a **deduplication key**, which debounces repeated calls: calls carrying the
+   * same `jobId` collapse into a single execution, which runs once the delay
+   * has elapsed without another call arriving. The window runs from the last
+   * call, not the first, so a burst is collapsed however long it lasts.
+   *
+   * Despite the name, this is not the BullMQ job id of the enqueued job, and
+   * `queue.getJob(jobId)` will not resolve the debounced job through it. BullMQ
+   * stores it as a separate Redis key; the matching read is
+   * `queue.getDeduplicationJobId(jobId)`.
+   *
+   * A delay carrying a `jobId` must be **at least three seconds**, and a
+   * shorter one is refused at enqueue.
+   *
+   * On a rate-limited workstream the delay must also clear the limiter's
+   * spacing: `delay - 1s >= duration / max`, so a workstream limited to one job
+   * a minute needs a 61-second delay. A delay that does not is refused at
+   * enqueue, naming the queue, both limiter numbers and a delay that would
+   * pass.
    */
   jobId?: string
 }
+
+/**
+ * `DelayedJobDuration`, but at least one field has to be there. Every field is
+ * optional on its own, so `{}` would otherwise compile and delay nothing.
+ * TypeScript has no "at least one of these" operator, so this spells out the
+ * four ways to satisfy it and joins them with `|`:
+ *
+ * ```ts
+ * | { seconds: number;  minutes?: number; hours?:   number; days?:  number }
+ * | { minutes: number;  seconds?: number; hours?:   number; days?:  number }
+ * | { hours:   number;  seconds?: number; minutes?: number; days?:  number }
+ * | { days:    number;  seconds?: number; minutes?: number; hours?: number }
+ * ```
+ *
+ * A value has to match one of those, which means carrying that line's required
+ * field. `{ seconds: 30 }` matches the first. `{}` matches none, and neither
+ * does `{ jobId: 'my-job' }`.
+ *
+ * Not exported: it exists only to narrow `DelayedJobOpts`. `DelayedJobDuration`
+ * itself stays all-optional because it is also the parameter type of the shared
+ * `durationToSeconds` helper.
+ */
+type AtLeastOneDelayedJobDuration = {
+  [Field in keyof DelayedJobDuration]-?: Required<Pick<DelayedJobDuration, Field>> &
+    Partial<Omit<DelayedJobDuration, Field>>
+}[keyof DelayedJobDuration]
 
 export interface DelayedJobDuration {
   seconds?: number
@@ -67,8 +128,15 @@ export interface BackgroundWithOpts {
   /**
    * an optional delay to hold off the job for a certain amount of
    * time after it is entered into the queue. Accepts the same options
-   * as `backgroundWithDelay`, including an optional `jobId` which
-   * debounces repeated calls within the delay window.
+   * as `backgroundWithDelay`, and must carry at least one of `seconds`,
+   * `minutes`, `hours` or `days`.
+   *
+   * Adding a `jobId` turns the delay into a **debounce**: repeated calls
+   * carrying the same `jobId` collapse into a single execution, which runs
+   * once the delay has elapsed without another call arriving. `jobId` is a
+   * deduplication key rather than a BullMQ job id.
+   *
+   * See {@link DelayedJobOpts.jobId}.
    */
   delay?: DelayedJobOpts
 
@@ -122,3 +190,20 @@ export type PsychicBackgroundOptions =
           never
         >
       >)
+
+/**
+ * @internal
+ *
+ * how a queue was configured, as far as the misconfiguration message needs to
+ * know in order to name the fix that applies to the worker that threw
+ */
+export interface WorkerQueueDescription {
+  /** simple (workstream) configuration or native BullMQ configuration */
+  mode: 'simple' | 'native'
+  /** the default workstream/queue, as opposed to a named one */
+  isDefaultQueue: boolean
+  /** the workstream or queue name as configured (not the formatted Redis queue name) */
+  configuredName: string
+  /** a workstream declared under `transitionalWorkstreams` */
+  transitional: boolean
+}

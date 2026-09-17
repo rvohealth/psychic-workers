@@ -1,7 +1,12 @@
 import { PsychicApp } from '@rvoh/psychic'
 import type { MockInstance } from 'vitest'
-import { Background } from '../../../src/package-exports/index.js'
-import { installBullMQRecorders } from '../../helpers/bullmqRecorders.js'
+import nameToRedisQueueName from '../../../src/background/helpers/nameToRedisQueueName.js'
+import { Background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
+import {
+  fakeRedisConnection,
+  installBullMQRecorders,
+  type RecordingWorker,
+} from '../../helpers/bullmqRecorders.js'
 
 describe('Background#work process event handling', () => {
   installBullMQRecorders()
@@ -122,4 +127,35 @@ describe('Background#work process event handling', () => {
       })
     })
   }
+
+  context('on an instance that has already connected as a producer', () => {
+    it('starts the workers the configuration asks for', () => {
+      // this file otherwise runs against the simple test-app config, whose worker
+      // count is environment-driven and defaults to 0; native mode is the only
+      // shape that pins a count in the configuration itself. Configured inline
+      // rather than through a shared helper, which lives in the other spec file
+      const queueConnection = fakeRedisConnection('queue')
+      const workerConnection = fakeRedisConnection('worker')
+      PsychicAppWorkers.getOrFail().set('background', {
+        nativeBullMQ: { defaultWorkerCount: 2 },
+        defaultQueueConnection: queueConnection,
+        defaultWorkerConnection: workerConnection,
+      })
+
+      // its own instance, separate from the fixture the outer beforeEach worked,
+      // and never the singleton: a root-suite beforeEach has already connected
+      // that one, so its guard is armed before any example runs
+      const producerThenWorker = new Background()
+      producerThenWorker.connect()
+      expect(producerThenWorker.workers.length).toEqual(0)
+
+      producerThenWorker.work()
+
+      const defaultQueueName = nameToRedisQueueName(Background.defaultQueueName, queueConnection)
+      expect(producerThenWorker.workers.length).toEqual(2)
+      expect(
+        producerThenWorker.workers.map(worker => (worker as unknown as RecordingWorker).queueName),
+      ).toEqual([defaultQueueName, defaultQueueName])
+    })
+  })
 })

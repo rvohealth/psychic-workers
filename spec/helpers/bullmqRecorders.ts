@@ -25,6 +25,8 @@ export interface RecordedJobAdd {
 
 export interface RecordingQueue {
   queueName: string
+  /** bullmq's `Queue#name`: the same formatted name, which a pause is logged under */
+  readonly name: string
   queueOptions: Record<string, unknown>
   adds: RecordedJobAdd[]
   jobSchedulers: unknown[][]
@@ -47,6 +49,14 @@ export interface RecordingQueue {
    * held the scheduler, so specs can assert which queue a removal landed in
    */
   removeJobScheduler(jobSchedulerId: string): Promise<boolean>
+
+  /**
+   * every `expireTimeMs` this queue was asked to `rateLimit` for, in order:
+   * the pause a worker processor applies when a job on this queue throws
+   * `RateLimitedPsychicJob`
+   */
+  rateLimits: number[]
+  rateLimit(expireTimeMs: number): Promise<void>
   close(): null
 }
 
@@ -99,12 +109,17 @@ export function installBullMQRecorders(): BullMQRecorders {
     public adds: RecordedJobAdd[] = []
     public jobSchedulers: unknown[][] = []
     public keys: Record<string, string> = {}
+    public rateLimits: number[] = []
 
     constructor(
       public queueName: string,
       public queueOptions: Record<string, unknown>,
     ) {
       allQueues.push(this)
+    }
+
+    public get name() {
+      return this.queueName
     }
 
     public add(jobType: string, jobData: unknown, opts: Record<string, unknown>) {
@@ -127,6 +142,11 @@ export function installBullMQRecorders(): BullMQRecorders {
 
       this.jobSchedulers.splice(index, 1)
       return Promise.resolve(true)
+    }
+
+    public rateLimit(expireTimeMs: number) {
+      this.rateLimits.push(expireTimeMs)
+      return Promise.resolve()
     }
 
     public close() {

@@ -1,7 +1,25 @@
 import { Job, Queue, WorkerOptions } from 'bullmq'
+import nameToRedisQueueName from '../background/helpers/nameToRedisQueueName.js'
 import parallelTestSafeQueueName from '../background/helpers/parallelTestSafeQueueName.js'
 import background, { Background } from '../background/index.js'
+import RateLimitedPsychicJob from '../error/background/RateLimitedPsychicJob.js'
+import { RedisOrRedisClusterConnection } from '../psychic-app-workers/index.js'
 import { BackgroundJobData } from '../types/background.js'
+
+/**
+ * @internal
+ *
+ * resolves the queue's expected Redis name through `nameToRedisQueueName`,
+ * rather than hand-reconstructing a cluster hash tag or parallel-test suffix.
+ * `queue.opts.connection` is the same `Redis | Cluster` instance the queue was
+ * built with, which is why the cast is safe for every queue this package builds.
+ */
+export function queueNamesMatch(queue: Queue, compareQueueName: string): boolean {
+  return (
+    queue.name ===
+    nameToRedisQueueName(compareQueueName, queue.opts.connection as RedisOrRedisClusterConnection)
+  )
+}
 
 const LOCK_TOKEN = 'psychic-test-worker'
 
@@ -29,6 +47,12 @@ export default class WorkerTestUtils {
    * NOTE: this is only useful if you are running with `testInvocation=manual`.
    * make sure to set this in your workers config, or else in your test,
    * so that jobs are successfully commited to the queue and can be worked off.
+   *
+   * A job that throws `RateLimitedPsychicJob` stops the loop: on a queue whose
+   * workers carry a BullMQ `limiter` the job is moved back to the queue (no
+   * attempt counted) and the call rejects with that error; on a queue whose
+   * workers carry none, the job fails with the misconfiguration error that
+   * production would fail it with, and the call rejects with that instead.
    */
   public static async work(opts: TestWorkerWorkOffOpts = {}) {
     background.connect()
@@ -39,7 +63,7 @@ export default class WorkerTestUtils {
     do {
       workWasDone = false
       for (const queue of queues) {
-        if (opts.queue && !this.queueNamesMatch(queue, opts.queue)) continue
+        if (opts.queue && !queueNamesMatch(queue, opts.queue)) continue
         workWasDone ||= await this.workOne(queue)
       }
     } while (workWasDone)
@@ -48,8 +72,9 @@ export default class WorkerTestUtils {
   public static async workScheduled(opts: TestWorkerScheduledWorkOffOpts = {}) {
     background.connect()
 
-    const queues = opts.queue
-      ? background.queues.filter(queue => queue.name === opts.queue)
+    const compareQueueName = opts.queue
+    const queues = compareQueueName
+      ? background.queues.filter(queue => queueNamesMatch(queue, compareQueueName))
       : background.queues
 
     if (opts.queue && !queues.length)
@@ -64,19 +89,33 @@ export default class WorkerTestUtils {
         const data = job.data as BackgroundJobData
         if (opts.for) {
           if (data.globalName === opts.for.globalName) {
-            await background.doWork(job)
+            await this.doScheduledWork(job, queue)
           }
         } else {
-          await background.doWork(job)
+          await this.doScheduledWork(job, queue)
         }
       }
+    }
+  }
+
+  /**
+   * runs a delayed job in place. A `RateLimitedPsychicJob` thrown from a job on
+   * a queue whose workers carry no BullMQ `limiter` surfaces as the same
+   * misconfiguration error production would fail the job with; on a queue whose
+   * workers carry one, it propagates untranslated so the spec can assert on it.
+   */
+  private static async doScheduledWork(job: Job, queue: Queue) {
+    try {
+      await background.doWork(job)
+    } catch (err) {
+      throw background.misconfiguredRateLimitSignal(err, queue) ?? err
     }
   }
 
   /*
    * iterates through each registered queue, and cleans out all
    * jobs, including waiting, paused, prioritized, delayed, completed,
-   * failed, and scheduled jobs. This is especially useful before a test
+   * failed, active, and scheduled jobs. This is especially useful before a test
    * where you plan to exercise background jobs manually.
    *
    * If your entire app is continuously exercising background jobs
@@ -99,9 +138,13 @@ export default class WorkerTestUtils {
       // are cleaned up below when their scheduler is removed.
       await queue.drain(true)
 
-      // clear out completed and failed jobs
+      // clear out completed, failed, and abandoned active jobs. `drain` does not
+      // touch `active`, so a job fetched by hand and never moved on would outlive
+      // the process and be counted by the next run of the suite. BullMQ leaves a
+      // job whose lock is still held alone.
       await queue.clean(0, 10000, 'completed')
       await queue.clean(0, 10000, 'failed')
+      await queue.clean(0, 10000, 'active')
 
       // clear out scheduled jobs
       const schedulers = await queue.getJobSchedulers()
@@ -123,22 +166,47 @@ export default class WorkerTestUtils {
     const job = await worker.getNextJob(LOCK_TOKEN)
     if (!job) return false
 
-    await this.processJob(job)
+    await this.processJob(job, queue)
     return true
   }
 
-  private static queueNamesMatch(queue: Queue, compareQueueName: string): boolean {
-    return (
-      queue.name === parallelTestSafeQueueName(compareQueueName) ||
-      queue.name === `{${parallelTestSafeQueueName(compareQueueName)}`
-    )
-  }
-
-  private static async processJob(job: Job) {
+  /**
+   * runs one fetched job to completion or failure, mirroring what a real worker
+   * would do with a `RateLimitedPsychicJob`, then surfacing it so the spec goes
+   * red rather than looping:
+   *
+   * - on a queue whose workers carry no BullMQ `limiter`, the job is failed with
+   *   the misconfiguration error production would fail it with (so, with the
+   *   queue's `attempts` > 1, it lands in `delayed` for its retry, out of
+   *   `active`, where `clean()` can reach it), and that error is rethrown
+   * - on a queue whose workers carry one, the job is moved back to the queue
+   *   with no attempt counted (BullMQ's own rate-limit path), and the
+   *   `RateLimitedPsychicJob` is rethrown
+   *
+   * Every other error only fails the job, as before.
+   */
+  private static async processJob(job: Job, queue: Queue) {
     try {
       const res = await background.doWork(job)
       await job.moveToCompleted(res, LOCK_TOKEN, false)
     } catch (err) {
+      const misconfigured = background.misconfiguredRateLimitSignal(err, queue)
+      if (misconfigured) {
+        await job.moveToFailed(misconfigured, LOCK_TOKEN, false)
+        throw misconfigured
+      }
+
+      if (err instanceof RateLimitedPsychicJob) {
+        // exactly what a real worker does with this signal: BullMQ's own rate-limit
+        // path is `job.moveToWait(token)` (`Worker#moveLimitedBackToWait`). It takes
+        // the job off `active` and releases the lock `workOne` took, without counting
+        // an attempt. Its Lua reads the job's own priority and puts a prioritized job
+        // back in `prioritized` rather than `wait`, so the destination matches
+        // production too — this package writes a priority on every job it enqueues.
+        await job.moveToWait(LOCK_TOKEN)
+        throw err
+      }
+
       await job.moveToFailed(err as Error, LOCK_TOKEN, false)
     }
   }
