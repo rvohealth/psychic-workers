@@ -22,9 +22,7 @@ import NoClassForSpecifiedGlobalName from '../error/background/NoClassForSpecifi
 import NoQueueForSpecifiedQueueName from '../error/background/NoQueueForSpecifiedQueueName.js'
 import NoQueueForSpecifiedWorkstream from '../error/background/NoQueueForSpecifiedWorkstream.js'
 import RateLimitedPsychicJob from '../error/background/RateLimitedPsychicJob.js'
-import RateLimitedPsychicJobThrownFromWorkerWithoutLimiter, {
-  WorkerQueueDescription,
-} from '../error/background/RateLimitedPsychicJobThrownFromWorkerWithoutLimiter.js'
+import RateLimitedPsychicJobThrownFromWorkerWithoutLimiter from '../error/background/RateLimitedPsychicJobThrownFromWorkerWithoutLimiter.js'
 import EnvInternal from '../helpers/EnvInternal.js'
 import PsychicAppWorkers, {
   BullMQNativeWorkerOptions,
@@ -44,6 +42,7 @@ import {
   BackgroundQueuePriority,
   JobTypes,
   QueueBackgroundJobConfig,
+  WorkerQueueDescription,
   WorkstreamBackgroundJobConfig,
 } from '../types/background.js'
 import nameToRedisQueueName from './helpers/nameToRedisQueueName.js'

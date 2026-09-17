@@ -95,7 +95,7 @@ export default class BaseBackgroundedService {
    * ```ts
    * await MyBackgroundableClass.backgroundWithDelay({ minutes: 5 }, 'myMethod', 'abc', 123)
    * ```
-   * though calling background must be awaited, the resolution of the promise
+   * though calling backgroundWithDelay must be awaited, the resolution of the promise
    * is an indication that a run is pending, not that it has completed.
    *
    * NOTE: in test environments, psychic will immediately invoke the underlying

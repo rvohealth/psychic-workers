@@ -83,7 +83,7 @@ export default class BaseBackgroundedModel extends Dream {
    * ```ts
    * await User.backgroundWithDelay({ minutes: 5 }, 'myMethod', 'abc', 123)
    * ```
-   * though calling background must be awaited, the resolution of the promise
+   * though calling backgroundWithDelay must be awaited, the resolution of the promise
    * is an indication that a run is pending, not that it has completed.
    *
    * NOTE: in test environments, psychic will immediately invoke the underlying
@@ -187,7 +187,7 @@ export default class BaseBackgroundedModel extends Dream {
    * method, preventing you from needing to explicitly wait for queues to flush
    * before making assertions.
    *
-   * @param methodName - the name of the static method you wish to run in the background
+   * @param methodName - the name of the instance method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
    */
   public async background<
@@ -221,7 +221,7 @@ export default class BaseBackgroundedModel extends Dream {
    * const user = await User.lastOrFail()
    * await user.backgroundWithDelay({ minutes: 5 }, 'myMethod', 'abc', 123)
    * ```
-   * though calling background must be awaited, the resolution of the promise
+   * though calling backgroundWithDelay must be awaited, the resolution of the promise
    * is an indication that a run is pending, not that it has completed.
    *
    * NOTE: in test environments, psychic will immediately invoke the underlying
@@ -231,7 +231,7 @@ export default class BaseBackgroundedModel extends Dream {
    * @deprecated use `backgroundWith({ delay }, methodName, ...args)` instead. This method will be removed in a future major version.
    *
    * @param delay - how long you want to hold off before allowing the job to run, given as at least one of `seconds`, `minutes`, `hours` or `days`, plus an optional `jobId` (a deduplication key) which debounces repeated calls into a single run
-   * @param methodName - the name of the static method you wish to run in the background
+   * @param methodName - the name of the instance method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
    */
   public async backgroundWithDelay<

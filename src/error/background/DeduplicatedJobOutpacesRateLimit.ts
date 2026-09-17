@@ -1,4 +1,4 @@
-import { WorkerQueueDescription } from './RateLimitedPsychicJobThrownFromWorkerWithoutLimiter.js'
+import { WorkerQueueDescription } from '../../types/background.js'
 
 /**
  * Not exported from the package: a delayed background job carried a `jobId`

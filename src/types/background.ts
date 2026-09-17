@@ -176,3 +176,20 @@ export type PsychicBackgroundOptions =
           never
         >
       >)
+
+/**
+ * @internal
+ *
+ * how a queue was configured, as far as the misconfiguration message needs to
+ * know in order to name the fix that applies to the worker that threw
+ */
+export interface WorkerQueueDescription {
+  /** simple (workstream) configuration or native BullMQ configuration */
+  mode: 'simple' | 'native'
+  /** the default workstream/queue, as opposed to a named one */
+  isDefaultQueue: boolean
+  /** the workstream or queue name as configured (not the formatted Redis queue name) */
+  configuredName: string
+  /** a workstream declared under `transitionalWorkstreams` */
+  transitional: boolean
+}
