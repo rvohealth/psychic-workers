@@ -56,8 +56,9 @@ To fix this, ${this.fix}
 
     if (this.queue.mode === 'simple') {
       if (this.queue.isDefaultQueue)
-        return `move the job to a named workstream that sets \`rateLimit: { max, duration }\` (rate limits target
-one external service, so the default workstream never carries one). For example, with
+        return `move the job to a named workstream that sets \`rateLimit: { max, duration }\` (a rate limit
+targets one external limit, so the default workstream never carries one, and a service that meters
+its endpoints separately wants a workstream per limit). For example, with
 \`namedWorkstreams: [{ name: 'slack', rateLimit: { max: 1, duration: 1000 } }]\` in your workers config,
 give the backgrounded class \`backgroundJobConfig = { workstream: 'slack' }\`.`
 

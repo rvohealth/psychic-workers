@@ -409,9 +409,16 @@ export interface PsychicBackgroundWorkstreamOptions {
    * per window across the whole workstream. For this workstream's workers it
    * takes precedence over a global `defaultBullMQWorkerOptions.limiter`.
    *
-   * A rate limit targets one external service, so give each rate-limited service
-   * its own named workstream, never the default workstream, which carries
-   * everything else. A job on this workstream that is told to slow down (an
+   * A rate limit targets one external limit, so every rate-limited service needs
+   * at least one named workstream of its own, and never the default workstream,
+   * which carries everything else. One workstream per *service* is the floor,
+   * not the rule: where a service meters its endpoints separately — a generous
+   * read limit and a strict write one, say — each limit wants its own
+   * workstream, since a single `rateLimit` cannot describe two of them. Several
+   * backgrounded classes pointed at the same service, even ones extending a
+   * shared base class and differing only in `backgroundJobConfig`, is the
+   * ordinary way to express that. A job on this workstream that is told to slow
+   * down (an
    * HTTP 429, say) can throw `RateLimitedPsychicJob` from
    * `@rvoh/psychic-workers/errors` to pause the whole workstream for the
    * service's retry-after duration without burning a retry attempt. That pause
@@ -420,6 +427,16 @@ export interface PsychicBackgroundWorkstreamOptions {
    * (`defaultBullMQWorkerOptions: { maxStartedAttempts: 10 }`, say) bounds how
    * many times one job may cycle through it; set it on any workstream whose
    * jobs throw the signal.
+   *
+   * A debounced job on this workstream — one backgrounded with a `jobId` — must
+   * carry a delay long enough that it cannot enqueue faster than this limit
+   * starts jobs, or it is refused at enqueue. The deduplication key lives one
+   * second less than the delay and that is the fastest one `jobId` can produce
+   * work, so the requirement is `delay - 1s >= duration / max`: with
+   * `{ max: 1, duration: 60000 }`, a debounced job needs a 61-second delay.
+   * Without the check a sustained stream of calls would grow a backlog in Redis
+   * that nothing surfaces, since the rate limit keeps the downstream service
+   * safe while it happens. See `DelayedJobOpts` for the full reasoning.
    *
    * `max` and `duration` are both required positive integers (`duration` in
    * milliseconds): a partial limit never rate-limited on either build, and

@@ -37,6 +37,7 @@ import PsychicAppWorkers, {
 } from '../psychic-app-workers/index.js'
 
 import AttemtedToBackgroundEntireDreamModel from '../error/background/AttemtedToBackgroundEntireDreamModel.js'
+import DeduplicatedJobOutpacesRateLimit from '../error/background/DeduplicatedJobOutpacesRateLimit.js'
 import {
   BackgroundJobConfig,
   BackgroundJobData,
@@ -1289,6 +1290,31 @@ export class Background {
         requestedDelay < MINIMUM_DEDUPLICATION_DELAY_MS
       )
         throw new DeduplicatedJobRequiresMinimumDelay(jobId, delaySeconds, MINIMUM_DEDUPLICATION_DELAY_MS)
+
+      // a legal delay can still be too short for the queue it lands on: the key
+      // lifetime is the fastest this `jobId` can produce jobs, and a limiter
+      // bounds how fast the queue can start them. See
+      // DeduplicatedJobOutpacesRateLimit for why the comparison is against the
+      // key lifetime rather than the delay, and why a burst that would have
+      // been fine is refused along with the sustained case.
+      const record = queueInstance ? this.queueWorkerRecords.get(queueInstance) : undefined
+      const limiter = record?.workerOptions.limiter
+
+      // `connect` validates `max` and `duration` for named workstreams only, so
+      // a global or native-mode limiter can be anything the type admits; a
+      // cadence derived from one of those is not worth refusing a job over
+      if (record && limiter && limiter.max > 0 && limiter.duration > 0 && Number.isFinite(limiter.duration)) {
+        const keyLifetime = requestedDelay - DEDUPLICATION_KEY_MARGIN_MS
+
+        if (keyLifetime < limiter.duration / limiter.max)
+          throw new DeduplicatedJobOutpacesRateLimit(
+            jobId,
+            requestedDelay,
+            keyLifetime,
+            limiter,
+            record.description,
+          )
+      }
     }
 
     // if delaySeconds is 0, we will intentionally treat

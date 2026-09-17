@@ -207,6 +207,39 @@ export type DelayedJobOpts = AtLeastOneDelayedJobDuration & {
    * existing one. Under the package's own framing that is a lost optimisation
    * rather than a failure: extra runs, not missing ones.
    *
+   * ## a rate-limited queue raises the floor, and this is enforced
+   *
+   * One of those stalls is not incidental but designed in, and it is checked
+   * rather than left to be discovered. Where the queue's workers carry a
+   * `rateLimit` (or a `defaultBullMQWorkerOptions.limiter`), the queue starts at
+   * most `max` jobs every `duration` — one job every `duration / max`. If the
+   * key's lifetime is shorter than that spacing, this one `jobId` can enqueue
+   * faster than the queue can start, and a sustained stream of calls grows a
+   * backlog without bound. Nothing fails while it happens: the rate limit is
+   * keeping the downstream service safe, and the jobs simply accumulate in
+   * Redis.
+   *
+   * So on a rate-limited queue the delay must satisfy
+   * `delay - 1s >= duration / max` as well as the three-second floor, and a
+   * delay that does not is **refused at enqueue**, naming the queue, both
+   * limiter numbers and a delay that would pass. A workstream limited to one
+   * job a minute needs a 61-second delay, not a three-second one.
+   *
+   * A burst that stops arriving is collapsed into a single run at any delay, so
+   * this refuses some configurations that would have worked. It is still the
+   * right way round: a job whose burstiness is genuinely guaranteed does not
+   * need the rate limit in the first place, since the debounce already collapses
+   * the burst into one call on the service, and a job whose burstiness is not
+   * guaranteed is the broken case.
+   *
+   * That leaves a job on a rate-limited workstream chosen for the service it
+   * talks to rather than for its own cadence, and it has two fixes. Widen the
+   * delay, which costs only latency the limiter would usually have imposed
+   * anyway; or give the job its own named workstream, which is not a workaround
+   * — a workstream carries one rate limit, so a service that meters its
+   * endpoints separately wants a workstream per limit in any case, and several
+   * backgrounded classes pointed at one service is the ordinary way to say so.
+   *
    * ## reaching past this API invalidates the guarantee
    *
    * Promoting or re-delaying a debounced job by hand through `background.queues`
