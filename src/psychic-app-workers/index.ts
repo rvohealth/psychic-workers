@@ -167,7 +167,9 @@ export interface BullMQNativeWorkerOptions extends WorkerOptions {
     priority?: number
   }
   /**
-   * How many jobs each worker built from this configuration runs at once.
+   * How many jobs each worker built from this configuration runs at once
+   * (https://docs.bullmq.io/guide/workers/concurrency).
+   *
    * Native BullMQ mode writes none, so BullMQ's default of **1** applies unless
    * this or `defaultBullMQWorkerOptions.concurrency` sets it. See
    * `PsychicBackgroundWorkstreamOptions.concurrency`.
@@ -281,7 +283,12 @@ export interface PsychicBackgroundSimpleOptions extends PsychicBackgroundSharedO
   defaultWorkstream?: {
     /** The number of workers working through the default queue, in this process. Defaults to 1. */
     workerCount?: number
-    /** How many jobs each default worker runs at once. **Defaults to 10**, as everywhere in simple mode. */
+    /**
+     * How many jobs each default worker runs at once
+     * (https://docs.bullmq.io/guide/workers/concurrency). Left unset, psychic
+     * falls back to 10, as everywhere in simple mode. See
+     * `PsychicBackgroundWorkstreamOptions.concurrency`.
+     */
     concurrency?: number
   }
 
