@@ -85,10 +85,24 @@ export type DelayedJobOpts = AtLeastOneDelayedJobDuration & {
 }
 
 /**
- * `DelayedJobDuration` with at least one of its fields made required, as a
- * union of the four ways to satisfy that. Deliberately not exported: it exists
- * only to narrow `DelayedJobOpts`, and `DelayedJobDuration` itself must stay
- * all-optional, since it is also the parameter type of the shared
+ * `DelayedJobDuration`, but at least one field has to be there. Every field is
+ * optional on its own, so `{}` would otherwise compile and delay nothing.
+ * TypeScript has no "at least one of these" operator, so this spells out the
+ * four ways to satisfy it and joins them with `|`:
+ *
+ * ```ts
+ * | { seconds: number;  minutes?: number; hours?:   number; days?:  number }
+ * | { minutes: number;  seconds?: number; hours?:   number; days?:  number }
+ * | { hours:   number;  seconds?: number; minutes?: number; days?:  number }
+ * | { days:    number;  seconds?: number; minutes?: number; hours?: number }
+ * ```
+ *
+ * A value has to match one of those, which means carrying that line's required
+ * field. `{ seconds: 30 }` matches the first. `{}` matches none, and neither
+ * does `{ jobId: 'my-job' }`.
+ *
+ * Not exported: it exists only to narrow `DelayedJobOpts`. `DelayedJobDuration`
+ * itself stays all-optional because it is also the parameter type of the shared
  * `durationToSeconds` helper.
  */
 type AtLeastOneDelayedJobDuration = {
