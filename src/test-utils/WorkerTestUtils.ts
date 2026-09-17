@@ -7,14 +7,12 @@ import { RedisOrRedisClusterConnection } from '../psychic-app-workers/index.js'
 import { BackgroundJobData } from '../types/background.js'
 
 /**
- * resolves the queue's expected Redis name through the one function that
- * already computes it, `nameToRedisQueueName`, rather than hand-reconstructing
- * a cluster hash tag or bare parallel-test suffix. `queue.opts.connection` is
- * the same `Redis | Cluster` instance the queue was built with (BullMQ's
- * `QueueBase` constructor shallow-merges opts), which is why the cast is safe
- * for every queue this package builds with a live connection instance —
- * scoped to the stock `bullmq` connection path; a substituted BullMQ-Pro
- * `Queue` is an accepted, unverified risk.
+ * @internal
+ *
+ * resolves the queue's expected Redis name through `nameToRedisQueueName`,
+ * rather than hand-reconstructing a cluster hash tag or parallel-test suffix.
+ * `queue.opts.connection` is the same `Redis | Cluster` instance the queue was
+ * built with, which is why the cast is safe for every queue this package builds.
  */
 export function queueNamesMatch(queue: Queue, compareQueueName: string): boolean {
   return (
@@ -117,7 +115,7 @@ export default class WorkerTestUtils {
   /*
    * iterates through each registered queue, and cleans out all
    * jobs, including waiting, paused, prioritized, delayed, completed,
-   * failed, and scheduled jobs. This is especially useful before a test
+   * failed, active, and scheduled jobs. This is especially useful before a test
    * where you plan to exercise background jobs manually.
    *
    * If your entire app is continuously exercising background jobs
@@ -140,27 +138,13 @@ export default class WorkerTestUtils {
       // are cleaned up below when their scheduler is removed.
       await queue.drain(true)
 
-      // clear out completed and failed jobs
+      // clear out completed, failed, and abandoned active jobs. `drain` does not
+      // touch `active`, so a job fetched by hand and never moved on would outlive
+      // the process and be counted by the next run of the suite. BullMQ leaves a
+      // job whose lock is still held alone.
       await queue.clean(0, 10000, 'completed')
       await queue.clean(0, 10000, 'failed')
-
-      // clear out abandoned active jobs. `drain` does not touch `active`, so a
-      // job that was fetched with `getNextJob` and never moved on outlives every
-      // other step here — and outlives the process, leaving a job in `active`
-      // that the next run of the suite counts. `job.remove()` refuses a job
-      // whose lock is still held, so one another process is genuinely working is
-      // left alone; only one whose lock has lapsed (or was released) is removed.
-      // A job abandoned seconds ago still holds its lock (BullMQ's default
-      // `lockDuration` is 30s) and is skipped until it lapses, which is why the
-      // spec that fetches a job by hand also gives it back by hand.
-      for (const job of await queue.getJobs(['active'])) {
-        try {
-          await job?.remove()
-        } catch {
-          // BullMQ refuses a job whose lock is still held: that one is being
-          // worked right now, by this process or another, and is not abandoned
-        }
-      }
+      await queue.clean(0, 10000, 'active')
 
       // clear out scheduled jobs
       const schedulers = await queue.getJobSchedulers()

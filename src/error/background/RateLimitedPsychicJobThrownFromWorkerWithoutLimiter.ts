@@ -20,11 +20,8 @@ export interface WorkerQueueDescription {
 /**
  * Not exported from the package: a `RateLimitedPsychicJob` was thrown from a
  * job whose worker carries no BullMQ `limiter`, so the queue cannot be paused.
- * The job runner fails the job with this error in the signal's place — an
- * ordinary failure, retried per the queue's `attempts`/backoff — so that it
- * reaches whatever failed-job monitoring the application has and the
- * developers learn the job is not on a rate-limited queue. The message names
- * the fix for the configuration mode in use.
+ * The job runner fails the job with this in the signal's place, so the failure
+ * reaches the application's failed-job monitoring.
  */
 export default class RateLimitedPsychicJobThrownFromWorkerWithoutLimiter extends Error {
   constructor(

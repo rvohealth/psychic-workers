@@ -65,12 +65,31 @@ const DEFAULT_CONCURRENCY = 10
  * two-second lull, twice the margin, so an ordinary round trip or pause inside
  * a burst cannot split it.
  *
- * Below about two seconds the subtraction stops leaving anything usable: the
- * tolerated gap falls to the same order as one Redis round trip, so the
- * mechanism becomes noise-dominated, and at a delay of one second it reaches
- * the `Math.max(1, …)` clamp in `_addToQueue` and silently degenerates to a
- * 1ms key. Refusing below the floor is deliberate, in preference to silently
- * raising the delay or deduplicating nothing.
+ * Below about two seconds the subtraction stops leaving anything usable: at a
+ * two-second delay the tolerated gap is 1000ms — the same scale as the margin
+ * itself, which exists precisely to absorb noise at that scale — and at a delay
+ * of one second it reaches the `Math.max(1, …)` clamp in `_addToQueue` and
+ * silently degenerates to a 1ms key. Refusing below the floor is deliberate, in
+ * preference to silently raising the delay or deduplicating nothing.
+ *
+ * Three consequences of the margin, all verified against BullMQ's Lua and
+ * stated nowhere else:
+ *
+ * - The last `DEDUPLICATION_KEY_MARGIN_MS` of every window deduplicates
+ *   nothing, because the key dies before the job fires. At the floor that dead
+ *   band is a third of the window; at an hour it is 0.03%. A caller whose
+ *   cadence lands inside the band degrades to no debounce at all, not to an
+ *   occasional extra run. The margin is flat, so longer delays are strictly
+ *   cheaper.
+ * - Promoting or re-delaying a debounced job by hand (`job.promote()`,
+ *   `job.changeDelay()`) moves the job out from under its key without touching
+ *   the key, so later calls collapse into a job that is no longer pending and
+ *   the run after the last call never happens. Follow either with
+ *   `queue.removeDeduplicationKey(jobId)`.
+ * - Collapsing only happens while the job is still in the delayed set. If
+ *   promotion stalls — rate limited, paused, saturated, or no worker running —
+ *   the key expires while the job sits there and every further call adds its
+ *   own delayed job for the rest of the stall. Extra runs, not missing ones.
  *
  * The floor is a refusal, so it is cheap to lower and breaking to raise.
  */
@@ -91,12 +110,9 @@ const DEDUPLICATION_KEY_MARGIN_MS = 1000
  * @internal
  *
  * everything `connect` knows about one queue's workers at the moment it builds
- * that queue: how the queue was configured, whether its workers carry a BullMQ
- * `limiter`, and the three things needed to build the workers themselves later.
- *
- * `description` is nested rather than flattened because it is what
- * {@link RateLimitedPsychicJobThrownFromWorkerWithoutLimiter} is handed; the
- * worker connection must not be able to ride into an error object.
+ * that queue. `description` is nested rather than flattened because it is what
+ * {@link RateLimitedPsychicJobThrownFromWorkerWithoutLimiter} is handed, and
+ * the worker connection must not be able to ride into an error object.
  */
 interface QueueWorkerRecord {
   /** how the queue was configured, as the misconfiguration message needs it */
@@ -109,10 +125,7 @@ interface QueueWorkerRecord {
   workerConnection: RedisOrRedisClusterConnection | undefined
   /**
    * how many workers this queue was configured for. Recorded as its own field
-   * and never read back off `workerOptions`: simple mode never writes a count
-   * into the options at all, and native named mode omits it when the queue has
-   * no `namedQueueWorkers` entry, so a read-back would build one worker for
-   * every queue configured for none.
+   * rather than read back off `workerOptions`, which does not always carry one.
    */
   workerCount: number
 }
@@ -126,26 +139,10 @@ export class Background {
    * returns the **logical** name of your app's default queue, built from your
    * app name (`MyAppBackgroundJobQueue`).
    *
-   * ## it is not the name the queue has in Redis
-   *
-   * `connect` rewrites every queue name — this one and each named workstream's
-   * — per connection, through `nameToRedisQueueName`
-   * (`src/background/helpers/nameToRedisQueueName.ts`). Braces are always
-   * stripped. Then, on an ioredis `Cluster` connection, the whole name is
-   * wrapped in Redis Cluster hash tags (`{MyAppBackgroundJobQueue}`) so that
-   * the queue's keys hash to one slot; on a plain `Redis` connection it is left
-   * bare, except under test, where a parallel vitest worker appends its pool id
-   * (`MyAppBackgroundJobQueue-2`). Only one of the two ever applies to a given
-   * connection: the hash tag is cluster-only, the test suffix non-cluster-only.
-   *
-   * ## so do not build Redis keys from this
-   *
-   * Every key BullMQ writes for the queue is namespaced by the *rewritten*
-   * name, including the deduplication key behind a delayed job's `jobId`, whose
-   * shape is `<prefix>:<queueName>:de:<jobId>`. A script that composes a key
-   * from this getter matches in plain-Redis development and finds nothing in
-   * cluster production — which looks the same as an empty queue. Read
-   * `queue.name` off `background.queues` after connecting instead.
+   * This is never the name the queue has in Redis: `connect` rewrites it per
+   * connection (brace-stripped, cluster hash-tagged, test-suffixed), and every
+   * key BullMQ writes is namespaced by the rewritten name. Do not compose Redis
+   * keys from this — read `queue.name` off `background.queues` instead.
    */
   public static get defaultQueueName() {
     const psychicWorkersApp = PsychicAppWorkers.getOrFail()
@@ -235,21 +232,12 @@ export class Background {
   /**
    * @internal
    *
-   * For every queue built by `connect`: how the queue was configured, whether
-   * the workers for that queue carry a BullMQ `limiter`, and the options,
-   * connection and count the workers themselves are built from. Computed from
-   * the same options object the workers are built from, and recorded whether or
-   * not workers are activated in this process, which makes it serve two
-   * readers. The worker processors, test invocation, and `WorkerTestUtils` read
-   * the first half, so that they all answer "may a job on this queue signal
-   * {@link RateLimitedPsychicJob}?" the same way; {@link buildRecordedWorkers}
-   * reads the second half, so that activation has everything it needs without
-   * re-walking the configuration and works just as well after `connect` has
-   * already returned.
-   *
-   * Keyed by Queue identity rather than name: a transitional workstream's
-   * queue has the same formatted name as its current twin but its own
-   * configuration.
+   * For every queue built by `connect`: how it was configured, whether its
+   * workers carry a BullMQ `limiter`, and what the workers are built from.
+   * Written whether or not workers are activated here, so activation can happen
+   * later without re-walking the configuration. Keyed by Queue identity rather
+   * than name: a transitional workstream's queue has the same formatted name as
+   * its current twin but its own configuration.
    */
   private queueWorkerRecords = new Map<Queue, QueueWorkerRecord>()
 
@@ -257,8 +245,7 @@ export class Background {
    * @internal
    *
    * set immediately before {@link buildRecordedWorkers} runs its build loop, so
-   * that a second activation builds nothing and a build that throws partway is
-   * not retryable into a second copy of the workers already constructed
+   * that a second activation builds nothing
    */
   private workersActivated = false
 
@@ -268,43 +255,14 @@ export class Background {
    * the `Worker` objects that run jobs off them. Synchronous: it returns
    * nothing, so it is called without `await` even from async code.
    *
-   * ## connecting and activating are separate
+   * Connecting and activating are separate. `activateWorkers` defaults to
+   * `false`, so connecting gets the producer side only. Queues are built once
+   * per instance, but a later activation still builds workers, so a process that
+   * connects first and calls `work()` afterwards gets its workers.
    *
-   * The queues are built once per instance — a repeat call finds them already
-   * built and skips that work rather than building a second generation of
-   * connections and queues. Activation is not tied to that check: every queue's
-   * worker options, worker connection and worker count are recorded as the
-   * queue is built, so a later `activateWorkers: true` — the one `work()`
-   * passes — builds the workers from that record, whether or not this instance
-   * had already connected. Workers are built once too, on the first activation.
-   *
-   * ## it is called for you
-   *
-   * You rarely call this yourself. Psychic connects on the
-   * `server:init:after-routes` hook, on every enqueue path (`staticMethod`,
-   * `scheduledMethod`, `modelInstanceMethod` and `unschedule`), in CLI codegen
-   * (the `cli:sync` hook, via `ASTWorkersSchemaBuilder`), in the
-   * `WorkerTestUtils` helpers (`work()`, `workScheduled()` and `clean()`), and
-   * in `work()` — which is the one caller in this package that passes
-   * `activateWorkers: true`.
-   *
-   * ## connecting does not make this a worker process
-   *
-   * `activateWorkers` defaults to `false`, so connecting never starts workers
-   * by itself. A webserver, a console session or a one-off script that connects
-   * gets the producer side only: queues it can add jobs to and inspect, and
-   * nothing that consumes them. In practice jobs are worked by a process
-   * running `work()`; `activateWorkers` is on this method's own signature, so a
-   * caller can build workers directly, but nothing in this package does that
-   * outside `work()`.
-   *
-   * What connecting as a producer does **not** do is foreclose becoming one
-   * later. A process that connects first and calls `work()` afterwards — a
-   * webserver that also works its own jobs, or a worker entrypoint that
-   * registers a scheduler before it calls `work()` — gets its workers from that
-   * `work()`. If that process configured no `defaultWorkerConnection`, the same
-   * `work()` now raises the missing-connection error instead of returning
-   * quietly.
+   * You rarely call this yourself — Psychic connects on the
+   * `server:init:after-routes` hook, on every enqueue path, in CLI codegen and
+   * in the `WorkerTestUtils` helpers.
    */
   public connect({
     activateWorkers = false,
@@ -337,15 +295,9 @@ export class Background {
    * configured.
    *
    * `connect` is what populates this, and before it has run the getter returns
-   * an **empty array** — the fields it compacts all start out null or empty —
-   * with no error and no warning. An inspection or maintenance script that
-   * forgets to connect therefore iterates nothing, exits 0, and is
-   * indistinguishable from an application with nothing queued. Call
-   * `background.connect()` first.
-   *
-   * Each `Queue` here carries the rewritten Redis name rather than the name you
-   * configured; see `Background.defaultQueueName` for how that rewrite works.
-   * `queue.name` is the name Redis actually knows.
+   * an **empty array**, with no error and no warning — indistinguishable from
+   * an application with nothing queued. Each `Queue` here carries the rewritten
+   * Redis name rather than the name you configured.
    */
   public get queues(): Queue[] {
     return compact([
@@ -358,17 +310,13 @@ export class Background {
 
   /**
    * Returns all the workers in your application: every BullMQ `Worker` this
-   * process has built, across the default queue, every named queue, and their
-   * transitional twins.
+   * process has built.
    *
    * Only a process that activated workers has any — `work()`, or a direct
    * `connect({ activateWorkers: true })`. Anywhere else the getter returns an
-   * **empty array**, with no error and no warning: a producer process that only
-   * connected, a process that has not connected at all, and a process that
-   * configured a `workerCount` of zero are indistinguishable here. A worker
-   * entrypoint that attaches its failure listeners by looping over this getter
-   * therefore attaches nothing at all if it runs before `work()` does, and logs
-   * nothing to say so.
+   * **empty array**, with no error and no warning, so a worker entrypoint that
+   * attaches failure listeners by looping over it before `work()` runs attaches
+   * nothing and logs nothing to say so.
    */
   public get workers() {
     return [...this._workers]
@@ -508,11 +456,8 @@ export class Background {
       activatingTransitionalWorkstreams?: boolean
     } = {},
   ) {
-    // a partial rateLimit is a compile error, but an untyped config can still deliver one, and
-    // open-source BullMQ would forward it as a limiter it does not validate, failing every job
-    // fetch on that workstream. Refused here, for the current and the transitional workstreams
-    // alike, before any queue or worker of this connect exists (the transitional re-entry below
-    // has already been checked)
+    // refused before any queue or worker of this connect exists, for the current and the
+    // transitional workstreams alike (the transitional re-entry below has already been checked)
     if (!activatingTransitionalWorkstreams) {
       this.assertNamedWorkstreamRateLimits(backgroundOptions.namedWorkstreams, false)
       this.assertNamedWorkstreamRateLimits(
@@ -617,9 +562,8 @@ export class Background {
         ...(namedWorkstream.rateLimit ? { limiter: namedWorkstream.rateLimit } : {}),
         // BullMQ Pro option (ignored by open-source BullMQ); Psychic can't be aware of BullMQ Pro options
         group: {
-          // Pro documents its worker `group` option as `{ limit, concurrency }` with no `id` (grouping
-          // happens at job add, see `_addToQueue`) per https://docs.bullmq.io/bullmq-pro/groups as read
-          // 2026-09-14; not verified against an installed Pro build
+          // Pro's worker `group` option is `{ limit, concurrency }` with no `id` (grouping
+          // happens at job add, see `_addToQueue`); not verified against an installed Pro build
           id: namedWorkstream.name,
           limit: namedWorkstream.rateLimit,
         },
@@ -779,20 +723,9 @@ export class Background {
   /**
    * @internal
    *
-   * records how `queue` was configured, whether the workers built for it carry
-   * a BullMQ `limiter`, and the three things {@link buildRecordedWorkers} needs
-   * to build those workers later: `workerOptions`, `workerConnection` and
-   * `workerCount`. `workerOptions` is the very object the workers are built
-   * from (minus the connection), so the record and the workers cannot disagree.
-   *
-   * It is the sole writer of {@link queueWorkerRecords}, and it records
-   * unconditionally — whether or not this process ever activates workers — so
-   * that processes which never build any (test invocation, `WorkerTestUtils`)
-   * can still consult the limiter answer, and so that a process which activates
-   * after `connect` has returned still finds everything the build needs.
-   *
-   * `workerCount` is passed rather than read back off `workerOptions`; see the
-   * field's own TSDoc on {@link QueueWorkerRecord} for why a read-back is wrong.
+   * the sole writer of {@link queueWorkerRecords}. `workerOptions` is the very
+   * object the workers are built from (minus the connection), so the record and
+   * the workers cannot disagree.
    */
   private recordQueueWorkers(
     queue: Queue,
@@ -813,17 +746,11 @@ export class Background {
   /**
    * @internal
    *
-   * builds every worker `connect` recorded a queue for, and is the only place
-   * inside `connect` that constructs one. Each record carries the very options
-   * object its queue's workers were always built from, so deferring the build
-   * to here reproduces the order, the count and the options of building it
-   * inline: the records are keyed by `Queue` identity in the order `connect`
-   * built the queues, and the default queue's record is always first, so the
-   * default missing-connection throw still pre-empts the named one.
-   *
-   * The activation flag is set before the loop, not after it: `_workers` is
-   * append-only, so a build that throws partway must not be retryable into a
-   * second copy of the workers it already constructed.
+   * builds every worker `connect` recorded a queue for, in the order the queues
+   * were built, so the default missing-connection throw still pre-empts the
+   * named one. The activation flag is set before the loop, not after it, because
+   * `_workers` is append-only and a build that throws partway must not be
+   * retryable into a second copy of the workers it already constructed.
    */
   private buildRecordedWorkers() {
     if (this.workersActivated) return
@@ -853,14 +780,10 @@ export class Background {
    * @internal
    *
    * throws {@link NamedWorkstreamRateLimitMissingMaxOrDuration} for the first
-   * workstream whose `rateLimit` lacks a positive integer `max` or `duration`
-   * (a stricter predicate than `RateLimitedPsychicJob`'s `pauseQueueForSeconds`,
-   * which rounds a fractional value up rather than refusing it). The type
-   * already requires both, but it admits any number; this catches the untyped
-   * config, and the fractional or oversize value the type allows, that would
-   * otherwise reach open-source BullMQ as a `limiter` it does not validate
-   * (a fractional `duration` is floored to 0ms and rate limits nothing; one
-   * past Redis's integer range fails every job fetch).
+   * workstream whose `rateLimit` lacks a positive integer `max` or `duration`.
+   * The type requires both but admits any number, and open-source BullMQ does
+   * not validate a `limiter`: a fractional `duration` floors to 0ms and rate
+   * limits nothing, and one past Redis's integer range fails every job fetch.
    */
   private assertNamedWorkstreamRateLimits(
     namedWorkstreams: PsychicBackgroundWorkstreamOptions[] | undefined,
@@ -880,33 +803,17 @@ export class Background {
   /**
    * @internal
    *
-   * When `err` is a {@link RateLimitedPsychicJob} thrown by a job on a queue
-   * whose workers carry no BullMQ `limiter`, returns the misconfiguration error
-   * the job fails with in its place (whose message names the fix for that
-   * queue's configuration); otherwise returns undefined. The worker processors,
-   * test invocation, and `WorkerTestUtils` all run this same check.
-   *
-   * The return is declared as `Error` rather than as the concrete class this
-   * builds. The class is deliberately not part of the package's public surface,
-   * and this method is `public` (three callers, one of them across a module
-   * boundary in `WorkerTestUtils`), so the concrete type would name the class in
-   * the emitted declarations and make it reachable as
-   * `ReturnType<Background['misconfiguredRateLimitSignal']>`. Callers only ever
-   * throw it or fail a job with it, so `Error` is all any of them needs.
+   * when `err` is a {@link RateLimitedPsychicJob} thrown on a queue whose workers
+   * carry no BullMQ `limiter`, returns the misconfiguration error to fail the job
+   * with instead; otherwise undefined. Declared as `Error` so the concrete,
+   * unexported class stays out of the emitted declarations. Four callers, one
+   * across a module boundary in `WorkerTestUtils`.
    */
   public misconfiguredRateLimitSignal(err: unknown, queue: Queue): Error | undefined {
     if (!(err instanceof RateLimitedPsychicJob)) return
 
-    // every caller hands over a Queue that `connect` built and recorded; anything else is a
-    // programming error, and guessing at its configuration would name a config entry that
-    // does not exist
     const record = this.queueWorkerRecords.get(queue)
-    if (!record)
-      throw new Error(
-        `[psychic-workers] no worker record for queue ${queue.name}: misconfiguredRateLimitSignal must be given a Queue built by Background#connect (one of Background#queues)`,
-      )
-
-    if (record.hasLimiter) return
+    if (!record || record.hasLimiter) return
 
     return new RateLimitedPsychicJobThrownFromWorkerWithoutLimiter(err, record.description)
   }
@@ -915,20 +822,11 @@ export class Background {
    * @internal
    *
    * the processor every worker on `queue` runs: {@link doWork}, with a
-   * {@link RateLimitedPsychicJob} thrown by the job translated into BullMQ's
-   * own rate-limit signal. The pause is logged at `warn` (its length comes
-   * from the job and is applied as given, rounded up to a whole second), the
-   * queue's limiter key is set for `pauseQueueForSeconds` seconds (pausing
-   * every worker on the queue that carries a
-   * `limiter`), then BullMQ's `RateLimitError` is thrown, which the worker
-   * recognizes by its message and answers by moving the job back to the queue
-   * without counting an attempt or emitting `failed`. `queue` is the Queue
-   * built alongside the worker on the same connection pair, so a transitional
-   * workstream's pause lands on its own Redis.
-   *
-   * Thrown from a job whose worker carries no `limiter`, the signal is a
-   * misconfiguration: the job fails, ordinarily, with
-   * {@link RateLimitedPsychicJobThrownFromWorkerWithoutLimiter}.
+   * {@link RateLimitedPsychicJob} translated into BullMQ's own rate-limit
+   * signal — the queue's limiter key is set, pausing every worker on the queue,
+   * then `RateLimitError` moves the job back without counting an attempt or
+   * emitting `failed`. Thrown where the workers carry no `limiter`, it is
+   * instead a misconfiguration: see {@link misconfiguredRateLimitSignal}.
    */
   private processorFor(queue: Queue) {
     return async (job: Job) => {
@@ -960,17 +858,9 @@ export class Background {
    * starts background workers: connects if this process has not connected yet,
    * then builds the `Worker` objects for every queue `connect` recorded, and
    * installs the process-level fatal-error and signal handlers that shut them
-   * down.
-   *
-   * This is the one caller in this package that asks for workers, and it gets
-   * them whatever the process did first — an earlier producer-only `connect()`,
-   * from a webserver or from registering a scheduled service, no longer leaves
-   * `work()` with nothing to do. A process with no `defaultWorkerConnection`
-   * configured raises `ActivatingBackgroundWorkersWithoutDefaultWorkerConnection`
-   * here for the same reason: asking for workers that cannot connect is an
-   * error, not a quiet return. That class is not exported, so there is nothing
-   * to catch it by; the remedy is to configure a `defaultWorkerConnection` in
-   * that process, or not to call `work()` in it.
+   * down. An earlier producer-only `connect()` no longer leaves `work()` with
+   * nothing to do. A process with no `defaultWorkerConnection` configured throws
+   * here rather than returning quietly.
    */
   public work() {
     process.on('uncaughtException', (error: Error) => {
@@ -1085,21 +975,6 @@ export class Background {
     const queueInstance = this.queueInstance(jobConfig)
     if (!queueInstance) throw new Error(`Missing queue for: ${jobConfig.queue?.toString()}`)
 
-    // `JobSchedulerTemplateOptions` declares every field optional — `priority?: number`
-    // among them — so `{ priority: maybePriority }`, the normal shape when the value comes
-    // from a config object, an env var or a nullable column, carries an own `priority` key
-    // whose value is `undefined` — a shape TypeScript admits for any consumer on the
-    // default `exactOptionalPropertyTypes: false`, and checks not at all from JavaScript.
-    // Spread over the mapped priority below
-    // it would erase it, BullMQ would then drop the undefined value before Redis, and the
-    // scheduler template would store no priority at all — putting every cron run this
-    // scheduler produces back in the `wait` list. Stripping the undefined-valued keys makes
-    // "caller-supplied options win" mean a caller-supplied *value*, not a caller-supplied
-    // key.
-    const definedScheduleOpts = Object.fromEntries(
-      Object.entries(scheduleOpts).filter(([, value]) => value !== undefined),
-    ) as JobSchedulerTemplateOptions
-
     await queueInstance.upsertJobScheduler(
       schedulerId,
       { pattern },
@@ -1107,22 +982,14 @@ export class Background {
         name: 'BackgroundJobQueueStaticJob',
 
         // the priority from the service's `backgroundJobConfig`, written where open-source
-        // BullMQ reads it — the same top-level priority `_addToQueue` writes on an ordinary
-        // job. Without it BullMQ enqueues every cron run at no priority at all, into the
-        // `wait` list, which it drains before it looks at the prioritized set — so a
-        // priority-less cron job is fetched ahead of every prioritized job on its queue.
-        //
-        // The two enqueue sites are written in opposite shapes on purpose. `_addToQueue`
-        // spreads its options first and writes `priority` last, because nothing there can
-        // supply a priority of its own — the options it merges are the ones it built
-        // itself (delay, deduplication), and the priority always comes from the job config
-        // or a `backgroundWith` override. This site must let an explicit `scheduleOpts`
-        // priority through, so it spreads last instead. The invariant they share is the
-        // one that matters: nothing can leave the mapped priority off the job. There it
-        // follows from the ordering; here it follows from the undefined-stripping above.
+        // BullMQ reads it. Without it BullMQ enqueues every cron run at no priority at all,
+        // into the `wait` list, which it drains before it looks at the prioritized set — so
+        // a priority-less cron job is fetched ahead of every prioritized job on its queue.
         opts: {
-          priority: this.mapPriorityWordToPriorityNumber(this.jobConfigToPriority(jobConfig)),
-          ...definedScheduleOpts,
+          ...scheduleOpts,
+          priority:
+            scheduleOpts.priority ??
+            this.mapPriorityWordToPriorityNumber(this.jobConfigToPriority(jobConfig)),
         },
 
         data: {
@@ -1269,20 +1136,15 @@ export class Background {
     // mismatches will raise exceptions even in tests
     const queueInstance = this.queueInstance(jobConfig)
 
-    // a `jobId` is a deduplication key, so it is only meaningful behind a delay
-    // of at least MINIMUM_DEDUPLICATION_DELAY_MS. This reads the raw
-    // `delaySeconds`, before the truthiness coercion below collapses 0, -0 and
-    // NaN into `undefined`, and it is set outside the test short-circuit below
-    // so that mismatches will raise exceptions even in tests.
+    // reads the raw `delaySeconds`, before the truthiness coercion below collapses
+    // 0, -0 and NaN into `undefined`, and runs outside the test short-circuit so
+    // that mismatches raise even in tests.
     if (jobId !== undefined) {
       const requestedDelay = (delaySeconds ?? NaN) * 1000
 
-      // an empty string is a `jobId` that was given rather than omitted (the
-      // type admits it), but it is not a usable deduplication key: BullMQ
-      // itself refuses it, and the deduplication block below reads it as falsy
-      // and would enqueue an ordinary delayed job with no key and no signal.
-      // Refuse it here, with the rest of the unusable pairs, so it cannot be
-      // the one shape that deduplicates nothing quietly.
+      // an empty string is a `jobId` given rather than omitted, and the
+      // deduplication block below would read it as falsy and enqueue an ordinary
+      // delayed job with no key and no signal.
       if (
         jobId === '' ||
         !Number.isFinite(requestedDelay) ||
@@ -1292,11 +1154,9 @@ export class Background {
         throw new DeduplicatedJobRequiresMinimumDelay(jobId, delaySeconds, MINIMUM_DEDUPLICATION_DELAY_MS)
 
       // a legal delay can still be too short for the queue it lands on: the key
-      // lifetime is the fastest this `jobId` can produce jobs, and a limiter
-      // bounds how fast the queue can start them. See
-      // DeduplicatedJobOutpacesRateLimit for why the comparison is against the
-      // key lifetime rather than the delay, and why a burst that would have
-      // been fine is refused along with the sustained case.
+      // lifetime is the fastest this `jobId` can produce jobs, and a limiter bounds
+      // how fast the queue can start them. Compared against the key lifetime rather
+      // than the delay, so a burst that would have been fine is refused too.
       const record = queueInstance ? this.queueWorkerRecords.get(queueInstance) : undefined
       const limiter = record?.workerOptions.limiter
 
@@ -1353,19 +1213,11 @@ export class Background {
       jobOptions.deduplication = {
         id: jobId,
         // deliberately shorter than the delay: see DEDUPLICATION_KEY_MARGIN_MS.
-        //
-        // `Math.floor` is live: BullMQ hands this straight to Redis
-        // `SET ... PX`, which rejects a fractional argument, and a duration
-        // built from e.g. `{ seconds: 3.0005 }` is fractional.
-        //
-        // `Math.max(1, …)` is belt-and-braces and cannot currently fire. The
-        // guard above has already refused any `jobId` under
-        // MINIMUM_DEDUPLICATION_DELAY_MS, so `delay - DEDUPLICATION_KEY_MARGIN_MS`
-        // is at least 2000 on every path into here. It is kept because it is
-        // the coupling that is easy to miss: if the floor is ever lowered to
-        // within a second of the margin, this clamp would turn an illegal
-        // lifetime into a 1ms key — deduplication silently off — rather than an
-        // error. Anyone lowering the floor should revisit this line first.
+        // `Math.floor` is live — Redis `SET ... PX` rejects a fractional
+        // argument, and `{ seconds: 3.0005 }` is fractional. `Math.max(1, …)`
+        // cannot fire at the current floor, but a `ttl <= 0` fails
+        // `deduplicateJob.lua:32` and sets the deduplication key with no expiry
+        // at all, so anyone lowering the floor should revisit this line first.
         ttl: Math.max(1, Math.floor(delay - DEDUPLICATION_KEY_MARGIN_MS)),
         extend: true,
         replace: true,
@@ -1374,23 +1226,14 @@ export class Background {
 
     const priorityNumber = this.mapPriorityWordToPriorityNumber(priority)
 
-    // `group` is a BullMQ Pro option: open-source BullMQ's `JobsOptions` does not declare
-    // it, so TypeScript checks nothing about it at the `add` call below — a misspelled key
-    // or a body Pro would reject compiles clean. Naming the shape here is what gives the
-    // compiler something to check the key and its body against.
-    interface ProGroupOption {
-      group: { id: string; priority: number }
-    }
-
     const groupConfig = this.groupIdToGroupConfig(groupId)
 
-    // BullMQ Pro group priority (ignored by open-source BullMQ), which orders this job's
-    // group against the queue's other groups. It sits alongside, rather than instead of,
-    // the job priority below: Pro documents the two as answering different questions —
-    // which group runs next, and which job within a group runs next — per
-    // https://docs.bullmq.io/bullmq-pro/groups as read 2026-09-14; not verified against an
-    // installed Pro build. Empty for an ungrouped job, so it carries no `group` key at all.
-    const proGroupOption: ProGroupOption | Record<string, never> = groupConfig
+    // BullMQ Pro group priority, ignored by open-source BullMQ, which orders this job's
+    // group against the queue's other groups alongside (not instead of) the job priority
+    // below — unverified against an installed Pro build. Open-source `JobsOptions` does
+    // not declare `group`, so without this annotation TypeScript checks nothing about the
+    // key or its body at the `add` call: spread properties escape excess-property checking.
+    const proGroupOption: { group: { id: string; priority: number } } | Record<string, never> = groupConfig
       ? { group: { ...groupConfig, priority: priorityNumber } }
       : {}
 
@@ -1398,18 +1241,9 @@ export class Background {
       ...jobOptions,
 
       // open-source BullMQ's job priority, and the only priority it reads. Written on
-      // every job, grouped or not: a group is a BullMQ Pro concept, so without Pro the
-      // `group` key spread in below is stored but never read — `Job.optsAsJSON` passes
-      // unrecognised option keys straight through, so it round-trips out of Redis, but
-      // nothing schedules on it — and a priority living only inside it would silently do
-      // nothing. Named workstreams are the case that matters — every one of their jobs
-      // carries a group id (the workstream name, see `jobConfigToGroupId`), even though
-      // the workstream already has its own queue and needs no group to route.
-      //
-      // Written last, after the spread, which is the opposite shape from the scheduler
-      // template in `scheduledMethod` — deliberately, since `jobOptions` here is built by
-      // this method rather than supplied by the caller. See the comment there for why the
-      // two differ and what they nonetheless guarantee alike.
+      // every job, grouped or not: without Pro the `group` key spread in below is stored
+      // but never scheduled on, so a priority living only inside it would do nothing —
+      // and every named workstream job carries a group id (see `jobConfigToGroupId`).
       priority: priorityNumber,
 
       ...proGroupOption,
@@ -1447,6 +1281,9 @@ export class Background {
     return { id: groupId }
   }
 
+  // a priority is only honoured while the job is fetched from the prioritized set. BullMQ
+  // returns a recovered stalled job to `wait`, which a worker drains ahead of the
+  // prioritized set, so a job that stalls is re-run ahead of higher-priority work.
   private mapPriorityWordToPriorityNumber(priority: BackgroundQueuePriority) {
     switch (priority) {
       case 'urgent':

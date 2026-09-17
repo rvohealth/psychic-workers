@@ -1,14 +1,10 @@
 /**
  * Not exported from the package: a named workstream's `rateLimit` reached
- * `connect()` without a positive integer `max` or `duration`. The type requires
- * both, but a JavaScript config, a cast, or parsed JSON can still hand one in
- * missing or of the wrong type, and the type itself admits a fractional or
- * oversize number. Open-source BullMQ forwards the worker `limiter` it becomes
- * unvalidated: a missing or non-numeric field fails every job fetch on that
- * workstream with a Lua error that never names `rateLimit`, a fractional
- * `duration` is floored to 0ms and rate limits nothing, and one past Redis's
- * integer range fails every fetch. `connect()` throws this instead, before
- * building anything.
+ * `connect()` without a positive integer `max` or `duration`. Open-source
+ * BullMQ forwards the worker `limiter` it becomes unvalidated: a missing or
+ * non-numeric field fails every job fetch on that workstream with a Lua error
+ * that never names `rateLimit`, a fractional `duration` floors to 0ms and rate
+ * limits nothing, and one past Redis's integer range fails every fetch.
  */
 export default class NamedWorkstreamRateLimitMissingMaxOrDuration extends Error {
   constructor(

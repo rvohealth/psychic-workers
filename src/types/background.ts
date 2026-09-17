@@ -44,8 +44,6 @@ export interface BackgroundJobData {
  * the delay to hold a job for and, when a `jobId` is provided, the debounce
  * that delay drives.
  *
- * ## this is a debounce
- *
  * Calling a delayed background method repeatedly with the same `jobId`
  * collapses those calls into a **single execution**. Each call slides the
  * pending job's fire time further out, and the job runs once, after the last
@@ -57,13 +55,6 @@ export interface BackgroundJobData {
  * await Report.backgroundWith({ delay: { seconds: 10, jobId: `report-${user.id}` } }, 'generate', user.id)
  * ```
  *
- * That is what the feature is for: running an expensive thing once instead of
- * once per call. What the package promises is that a run happens *after the
- * last call* — not that every call produces a run, and not that any particular
- * call is the one that produced it.
- *
- * ## a delay always needs a duration
- *
  * A delay object must carry at least one of `seconds`, `minutes`, `hours` or
  * `days`. `{}` and `{ jobId: 'my-job' }` are compile errors, since a delay with
  * no duration delays nothing and a `jobId` with no duration deduplicates
@@ -71,188 +62,24 @@ export interface BackgroundJobData {
  */
 export type DelayedJobOpts = AtLeastOneDelayedJobDuration & {
   /**
-   * a **deduplication key**, which debounces repeated calls: see
-   * `DelayedJobOpts` above for what that means. Everything below is the fine
-   * print on that guarantee.
+   * a **deduplication key**, which debounces repeated calls: calls carrying the
+   * same `jobId` collapse into a single execution, which runs once the delay
+   * has elapsed without another call arriving. The window runs from the last
+   * call, not the first, so a burst is collapsed however long it lasts.
    *
-   * ## it is not a job id
+   * Despite the name, this is not the BullMQ job id of the enqueued job, and
+   * `queue.getJob(jobId)` will not resolve the debounced job through it. BullMQ
+   * stores it as a separate Redis key; the matching read is
+   * `queue.getDeduplicationJobId(jobId)`.
    *
-   * Despite the name, this is not the BullMQ job id of the job that gets
-   * enqueued, and `queue.getJob(jobId)` will not resolve the debounced job
-   * through it. BullMQ stores it as a separate Redis key, whose real shape is
-   * `<prefix>:<queueName>:de:<jobId>` — where `<queueName>` is this package's
-   * own rewrite of the queue name you configured (see `nameToRedisQueueName`),
-   * not the configured name itself. The matching read is
-   * `queue.getDeduplicationJobId(jobId)`, which returns the id of the job the
-   * key currently points at.
+   * A delay carrying a `jobId` must be **at least three seconds**, and a
+   * shorter one is refused at enqueue.
    *
-   * ## what a burst costs, and why the delay must be at least three seconds
-   *
-   * Every call that replaces the pending job also rearms the key for its full
-   * lifetime, so **the window runs from the last call, not the first**, and a
-   * burst is collapsed however long it lasts. Ten thousand calls over two
-   * minutes produce one run, three seconds after the last of them, exactly as
-   * three calls over 50ms do. Burst length is not what the floor is about.
-   *
-   * What can split a burst is a single **gap between two consecutive calls**
-   * longer than the key's life — and the key's life is the delay minus the one
-   * second below. That subtraction is the whole of the floor:
-   *
-   * | delay | key lives | tolerates a lull of | runs after the last call |
-   * | ----- | --------- | ------------------- | ------------------------ |
-   * | 1h    | 59m 59s   | 59m 59s             | 1h                       |
-   * | 10s   | 9s        | 9s                  | 10s                      |
-   * | 3s    | 2s        | 2s                  | 3s                       |
-   * | 2s    | 1s        | 1s                  | 2s                       |
-   * | 1s    | *(1ms)*   | nothing             | 1s                       |
-   *
-   * Three seconds is where that subtraction still leaves something usable: a
-   * two-second tolerance, twice the margin, so an ordinary Redis round trip,
-   * a batch boundary or a GC pause inside a burst cannot split it. At two
-   * seconds the tolerance is one second — the same figure as the margin, which
-   * exists precisely because one second is the scale at which this system's
-   * own infrastructure noise lives, so anything the margin was sized to absorb
-   * would also split the burst. At one second the delay has been eaten
-   * entirely: the `Math.max(1, …)` clamp yields a 1ms key and deduplication is
-   * silently off, which is what the floor exists to make unreachable.
-   *
-   * Two things the floor does **not** buy, both worth sizing a delay against:
-   *
-   * - **The delay is not the latency.** The job becomes *due* one delay after
-   *   the last call; a worker still has to promote and pick it up. On a rate
-   *   limited workstream that pickup is bounded by the limiter, not by this.
-   * - **A stall is not collapsed.** Once the key has expired, a queue whose
-   *   workers are rate limited, paused or saturated turns every further call
-   *   into its own delayed job, for as long as the stall lasts. Shorter delays
-   *   reach that state sooner.
-   *
-   * ## the guarantee has a premise, and there is no knob
-   *
-   * The deduplication key is armed for one second less than the delay, so that
-   * it dies before the job fires and a late call starts a new timer instead of
-   * being dropped on the floor. That one second has to cover the round trip
-   * that adds the job **and** the disagreement between the clock that stamped
-   * the job's fire time and the clock that promotes it — together, not a second
-   * of each. A Redis failover, an ioredis reconnect that buffers the add in its
-   * offline queue, or a fork pause during `BGSAVE` will consume the whole
-   * budget on its own, even with perfectly synchronised clocks. Where several
-   * processes share one `jobId`, the fire time comes from the clock of whichever
-   * process made the last call, so the premise must hold for the worst-clocked
-   * of them. A deployment whose clocks or Redis round trips drift past that is
-   * outside what this package can promise, and there is no option exposed to
-   * widen the margin.
-   *
-   * Four things are worth knowing about that premise, because they decide what
-   * a deployment can do about it:
-   *
-   * - **Only one direction of clock skew breaks it.** A *worker* clock ahead of
-   *   the *producer* clock eats the margin; a worker clock behind it is
-   *   harmless, since promotion simply happens late and the window shrinks. One
-   *   producer with one bad clock is enough — no second producer is needed. A
-   *   3s offset leaves a 2s window in which a call is swallowed after the job
-   *   has run, with no network latency involved at all.
-   * - **`enableOfflineQueue: false` is the one mitigation available.** The
-   *   scaffolded `defaultQueueConnection` already sets it. With it, a command issued
-   *   while the connection is down is rejected at the call site instead of
-   *   being buffered and landing late — a visible failure rather than a silent
-   *   swallow. It does not cover a half-open TCP connection to a dead master,
-   *   so it narrows the hazard rather than removing it.
-   * - **A failover is not bounded by one round trip.** When the margin is
-   *   consumed by an outage, the exposure is the length of the outage. An 8s
-   *   Sentinel failover on a 10s delay leaves roughly 6.9s during which every
-   *   call for that `jobId` is swallowed after the job has already run — the
-   *   original missed-run failure, scaled up.
-   * - **Retries are safe.** A job that fails and is re-delayed cannot be
-   *   swallowed: its key is long gone by then. Nor can a retry's finalization
-   *   clobber a newer key, since finalization is a no-op while a key's TTL is
-   *   still live. This is a hazard that looks real and does not materialise.
-   *
-   * ## the last second of the window does not deduplicate
-   *
-   * The margin has a cost, and it is the largest behavioural consequence of the
-   * mechanism: because the key dies one second before the job fires, the last
-   * second of every window deduplicates nothing. At the three-second floor that
-   * is a third of the window; at an hour it is 0.03%.
-   *
-   * A caller whose cadence happens to land inside that band degrades from a
-   * debounce to **no debounce at all**, not merely to an occasional extra run.
-   * With `{ seconds: 3 }` — the floor, where the band is widest: a call at 0.0
-   * arms a key that expires at 2.0 for a job due at 3.0; a call at 2.5 finds no
-   * key and starts a second job, due at 5.5, while the first still runs at 3.0;
-   * a call at 5.0 does it again. Every call produces a run. Note the cadence
-   * that does this — one call every 2.5 seconds — is a slow trickle, not a
-   * burst: a burst's calls land far inside the key's life and collapse.
-   *
-   * The lever is the delay. The margin is a flat second, so **longer delays are
-   * strictly cheaper**: the dead band is a fixed width and shrinks as a fraction
-   * of the window as the delay grows. A caller that cares about collapsing and
-   * can tolerate a later run should widen the delay rather than tighten it.
-   *
-   * ## a collapsed call is silent
-   *
-   * When a call is collapsed, nothing marks it: no event is emitted, no flag is
-   * returned, and the awaited call resolves indistinguishably from one that
-   * enqueued. There is therefore no way to instrument around it. BullMQ's
-   * `deduplicated` event is not that signal — it fires when a pending job is
-   * successfully replaced, so it counts collapses, not the calls that were
-   * dropped without one.
-   *
-   * ## a stalled worker stops the collapsing
-   *
-   * Collapsing only happens while the job is still waiting in the delayed set.
-   * If promotion stalls — a rate-limited workstream, a paused worker, a
-   * `concurrency: 1` worker stuck behind a long job, a deploy with no worker
-   * running — the key expires while the job sits there, and for the rest of the
-   * stall every call adds its own pending job rather than collapsing into the
-   * existing one. Under the package's own framing that is a lost optimisation
-   * rather than a failure: extra runs, not missing ones.
-   *
-   * ## a rate-limited queue raises the floor, and this is enforced
-   *
-   * One of those stalls is not incidental but designed in, and it is checked
-   * rather than left to be discovered. Where the queue's workers carry a
-   * `rateLimit` (or a `defaultBullMQWorkerOptions.limiter`), the queue starts at
-   * most `max` jobs every `duration` — one job every `duration / max`. If the
-   * key's lifetime is shorter than that spacing, this one `jobId` can enqueue
-   * faster than the queue can start, and a sustained stream of calls grows a
-   * backlog without bound. Nothing fails while it happens: the rate limit is
-   * keeping the downstream service safe, and the jobs simply accumulate in
-   * Redis.
-   *
-   * So on a rate-limited queue the delay must satisfy
-   * `delay - 1s >= duration / max` as well as the three-second floor, and a
-   * delay that does not is **refused at enqueue**, naming the queue, both
-   * limiter numbers and a delay that would pass. A workstream limited to one
-   * job a minute needs a 61-second delay, not a three-second one.
-   *
-   * A burst that stops arriving is collapsed into a single run at any delay, so
-   * this refuses some configurations that would have worked. It is still the
-   * right way round: a job whose burstiness is genuinely guaranteed does not
-   * need the rate limit in the first place, since the debounce already collapses
-   * the burst into one call on the service, and a job whose burstiness is not
-   * guaranteed is the broken case.
-   *
-   * That leaves a job on a rate-limited workstream chosen for the service it
-   * talks to rather than for its own cadence, and it has two fixes. Widen the
-   * delay, which costs only latency the limiter would usually have imposed
-   * anyway; or give the job its own named workstream, which is not a workaround
-   * — a workstream carries one rate limit, so a service that meters its
-   * endpoints separately wants a workstream per limit in any case, and several
-   * backgrounded classes pointed at one service is the ordinary way to say so.
-   *
-   * ## reaching past this API invalidates the guarantee
-   *
-   * Promoting or re-delaying a debounced job by hand through `background.queues`
-   * — `job.promote()`, `job.changeDelay()` — moves the job out from under its
-   * deduplication key without touching the key, so subsequent calls are
-   * collapsed into a job that is no longer pending and the run after the last
-   * call never happens. Follow either with
-   * `await queue.removeDeduplicationKey(jobId)` — that call takes the
-   * deduplication key, which is this field. Removing the *job* needs no
-   * follow-up: `queue.remove(job.id)` clears the key as part of removing the
-   * job. Note the two different identifiers — `queue.remove` takes BullMQ's
-   * generated job id, and handing it this deduplication key instead removes
-   * neither the job nor the key.
+   * On a rate-limited workstream the delay must also clear the limiter's
+   * spacing: `delay - 1s >= duration / max`, so a workstream limited to one job
+   * a minute needs a 61-second delay. A delay that does not is refused at
+   * enqueue, naming the queue, both limiter numbers and a delay that would
+   * pass.
    */
   jobId?: string
 }
@@ -293,8 +120,9 @@ export interface BackgroundWithOpts {
    * Adding a `jobId` turns the delay into a **debounce**: repeated calls
    * carrying the same `jobId` collapse into a single execution, which runs
    * once the delay has elapsed without another call arriving. `jobId` is a
-   * deduplication key rather than a BullMQ job id, and a delay carrying one
-   * must be at least three seconds. See `DelayedJobOpts` for the full contract.
+   * deduplication key rather than a BullMQ job id.
+   *
+   * See {@link DelayedJobOpts.jobId}.
    */
   delay?: DelayedJobOpts
 

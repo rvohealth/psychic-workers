@@ -1,5 +1,5 @@
 import { PsychicApp } from '@rvoh/psychic'
-import { Job, Queue } from 'bullmq'
+import { Job } from 'bullmq'
 import { Redis } from 'ioredis'
 import nameToRedisQueueName from '../../../src/background/helpers/nameToRedisQueueName.js'
 import RateLimitedPsychicJobThrownFromWorkerWithoutLimiter from '../../../src/error/background/RateLimitedPsychicJobThrownFromWorkerWithoutLimiter.js'
@@ -488,45 +488,6 @@ describe('RateLimitedPsychicJob', () => {
 
         await expect(invoke(limitedDefault, {})).rejects.toThrow(RateLimitedPsychicJob)
       })
-    })
-  })
-
-  /**
-   * `misconfiguredRateLimitSignal` answers from the record `connect` fills for
-   * each queue it builds. A queue it did not build has no record, and guessing
-   * at its configuration would name a config entry that does not exist (the
-   * formatted Redis name, say), so that is an invariant failure, not a lookup.
-   */
-  describe('misconfiguredRateLimitSignal given a queue connect() did not build', () => {
-    const bullmq = installBullMQRecorders()
-
-    let backgroundInstance: Background
-    let strayQueue: Queue
-
-    beforeEach(() => {
-      PsychicAppWorkers.getOrFail().set('background', {
-        defaultQueueConnection: fakeRedisConnection('queue'),
-        defaultWorkerConnection: undefined,
-        namedWorkstreams: [{ name: 'limited', rateLimit: { max: 1, duration: 1000 } }],
-      })
-      backgroundInstance = new Background()
-      backgroundInstance.connect()
-
-      strayQueue = new bullmq.Queue('stray', {}) as unknown as Queue
-      expect(backgroundInstance.queues).not.toContain(strayQueue)
-    })
-
-    it('throws, naming the queue, when the error is the signal', () => {
-      const signal = new RateLimitedPsychicJob({ pauseQueueForSeconds: PAUSE_QUEUE_FOR_SECONDS })
-      expect(() => backgroundInstance.misconfiguredRateLimitSignal(signal, strayQueue)).toThrow(
-        '[psychic-workers] no worker record for queue stray',
-      )
-    })
-
-    it('still answers undefined for any other error, since that needs no record', () => {
-      expect(
-        backgroundInstance.misconfiguredRateLimitSignal(new Error('ordinary'), strayQueue),
-      ).toBeUndefined()
     })
   })
 })

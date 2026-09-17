@@ -167,14 +167,9 @@ export interface BullMQNativeWorkerOptions extends WorkerOptions {
     priority?: number
   }
   /**
-   * How many jobs each worker built from this configuration runs at once
-   * (https://docs.bullmq.io/guide/workers/concurrency).
-   *
-   * Native BullMQ mode writes no concurrency of its own, so BullMQ's default of
-   * **1** applies unless this — or `defaultBullMQWorkerOptions.concurrency` —
-   * sets it. Simple mode always writes 10 unless the workstream overrides it,
-   * so a queue moved between the two modes changes how many jobs it runs at
-   * once by a factor of ten unless you set this. See
+   * How many jobs each worker built from this configuration runs at once.
+   * Native BullMQ mode writes none, so BullMQ's default of **1** applies unless
+   * this or `defaultBullMQWorkerOptions.concurrency` sets it. See
    * `PsychicBackgroundWorkstreamOptions.concurrency`.
    */
   concurrency?: number
@@ -184,10 +179,9 @@ export interface BullMQNativeWorkerOptions extends WorkerOptions {
    * Read **only** for `nativeBullMQ.namedQueueWorkers`, where it defaults to 1
    * (a named queue with no entry in `namedQueueWorkers` gets no workers at
    * all). It is *not* read for `nativeBullMQ.defaultWorkerOptions`: the default
-   * queue's worker count comes from `nativeBullMQ.defaultWorkerCount`.
-   *
-   * See `PsychicBackgroundWorkstreamOptions.workerCount` for what a worker is
-   * and for the `workerCount × concurrency` product.
+   * queue's worker count comes from `nativeBullMQ.defaultWorkerCount`. See
+   * `PsychicBackgroundWorkstreamOptions.workerCount` for the
+   * `workerCount × concurrency` product.
    */
   workerCount?: number
 }
@@ -212,36 +206,17 @@ export interface PsychicBackgroundNativeBullMQOptions extends PsychicBackgroundS
     namedQueueOptions?: Record<string, QueueOptionsWithConnectionInstance>
 
     /**
-     * Native BullMQ options to provide to configure the default workers
-     * for psychic. By default, Psychic leverages a single-queue system, with
-     * many workers running off the queue. Each of those workers receives this
-     * same configuration, spread over `defaultBullMQWorkerOptions` — so this is
-     * where `concurrency`, `limiter` and every other BullMQ worker option for
-     * the default workers comes from.
-     *
-     * It does **not** supply how many default workers there are: a
-     * `workerCount` set here is never read, and the count comes from
-     * `defaultWorkerCount` below.
+     * Native BullMQ options for the default workers, spread over
+     * `defaultBullMQWorkerOptions` — where `concurrency`, `limiter` and every
+     * other BullMQ worker option for them comes from. A `workerCount` set here
+     * is never read; the count comes from `defaultWorkerCount` below.
      */
     defaultWorkerOptions?: BullMQNativeWorkerOptions
 
     /**
-     * The number of default workers to run against the default Psychic
-     * background queues, in this process.
-     *
-     * By default, Psychic leverages a single-queue system, with
-     * many workers running off a single queue. This number determines
-     * the number of those default workers to provide, and it is the only
-     * source of that count in native mode — `defaultWorkerOptions.workerCount`
-     * is not read. Defaults to 1, and takes effect only in a process that
-     * activates workers — one that calls `background.work()`, or `connect` with
-     * `activateWorkers: true`. A process that only connects builds no workers
-     * whatever this is set to; one that connects and later calls `work()`
-     * builds this many then.
-     *
-     * Each of those workers runs `defaultWorkerOptions.concurrency` jobs at
-     * once, which is BullMQ's default of 1 when nothing sets it, so the jobs in
-     * flight here are the product of the two. See
+     * The number of default workers to run in this process, and the only source
+     * of that count in native mode. Defaults to 1, and takes effect only in a
+     * process that activates workers. See
      * `PsychicBackgroundWorkstreamOptions.workerCount`.
      */
     defaultWorkerCount?: number
@@ -298,28 +273,15 @@ export interface PsychicBackgroundSimpleOptions extends PsychicBackgroundSharedO
   defaultWorkerConnection: RedisOrRedisClusterConnection | undefined
 
   /**
-   * Every Psychic application that leverages simple background jobs will have a default
-   * workstream, whose queue carries every job not backgrounded to a named
-   * workstream. Both fields mean exactly what they mean on a named workstream —
-   * see `PsychicBackgroundWorkstreamOptions.workerCount` and `.concurrency`.
+   * The default workstream, whose queue carries every job not backgrounded to a
+   * named workstream. Both fields mean exactly what they mean on a named
+   * workstream — see `PsychicBackgroundWorkstreamOptions.workerCount` and
+   * `.concurrency`.
    */
   defaultWorkstream?: {
-    /**
-     * The number of workers that will work through the default queue, in this
-     * process. Defaults to 1. See
-     * `PsychicBackgroundWorkstreamOptions.workerCount` for what a worker is and
-     * for the `workerCount × concurrency` product.
-     */
+    /** The number of workers working through the default queue, in this process. Defaults to 1. */
     workerCount?: number
-    /**
-     * How many jobs each default worker runs at once
-     * (https://docs.bullmq.io/guide/workers/concurrency). **Defaults to 10**,
-     * as everywhere in simple mode, and overrides any `concurrency` set in
-     * `defaultBullMQWorkerOptions`. Native BullMQ mode writes no concurrency at
-     * all, so BullMQ's default of 1 applies there — see
-     * `PsychicBackgroundWorkstreamOptions.concurrency` for that tenfold
-     * difference.
-     */
+    /** How many jobs each default worker runs at once. **Defaults to 10**, as everywhere in simple mode. */
     concurrency?: number
   }
 
@@ -330,12 +292,11 @@ export interface PsychicBackgroundSimpleOptions extends PsychicBackgroundSharedO
    * by open-source BullMQ)
    *
    * named workstreams are useful for dispersing queues among nodes in a Redis cluster,
-   * for running queues on different Redis instances, and for rate limiting: a named
-   * workstream's `rateLimit` bounds how many of its jobs start per time window across
-   * all of its workers and all processes running it, on open-source BullMQ and BullMQ
-   * Pro alike (useful for interacting with external APIs; see
+   * for running queues on different Redis instances, and for rate limiting, on
+   * open-source BullMQ and BullMQ Pro alike (see
    * `PsychicBackgroundWorkstreamOptions.rateLimit`). A rate limit targets one external
-   * service, so give each rate-limited service its own named workstream
+   * limit, so give each rate-limited service its own named workstream — and where a
+   * service meters its endpoints separately, one workstream per limit
    */
   namedWorkstreams?: PsychicBackgroundWorkstreamOptions[]
 
@@ -355,29 +316,13 @@ export interface PsychicBackgroundWorkstreamOptions {
 
   /**
    * The number of workers you want to run on this configuration, in **this
-   * process**. Defaults to 1.
-   *
-   * ## what a "worker" is here
-   *
-   * Activating workers — `background.work()`, or `connect` with
-   * `activateWorkers: true` — loops this count constructing BullMQ `Worker`
-   * objects inside the process that activated them; it forks and spawns
-   * nothing. Those workers share that one process's event loop, and the job
-   * processor they are given is an inline async function rather than a
-   * processor file, so BullMQ's sandboxed-process and worker-thread routes are
-   * never taken. Raising this number buys concurrent *waiting* — on Redis, on
-   * the database, on an HTTP call — not concurrent CPU. CPU parallelism comes
-   * from running more worker processes.
-   *
-   * ## how many jobs actually run at once
+   * process**. Defaults to 1. These are BullMQ `Worker` objects sharing the
+   * activating process's event loop, not forked processes, so raising this buys
+   * concurrent waiting rather than concurrent CPU.
    *
    * `workerCount × concurrency` is the ceiling on this workstream's jobs in
-   * flight in one process; multiply by the number of processes running
-   * `work()` for the application-wide ceiling. That product, not either field
-   * on its own, is the number to size against a downstream limit such as a
-   * connection pool or an external API's quota. Where this workstream also sets
-   * `rateLimit`, that bounds how many jobs *start* per window across every
-   * worker and process, while these two bound how many are running at once.
+   * flight in one process, and that product is what to size against a
+   * downstream limit such as a connection pool or an external API's quota.
    */
   workerCount?: number
   /**
@@ -388,10 +333,9 @@ export interface PsychicBackgroundWorkstreamOptions {
    * `concurrency` onto a simple-mode worker, falling back to 10 when the
    * workstream does not set one — which also means it overrides any
    * `concurrency` placed in `defaultBullMQWorkerOptions`. Native BullMQ mode
-   * writes none, so BullMQ's own default of 1 applies there unless a worker
-   * options bag sets it. Moving a queue between the two modes therefore changes
-   * how many jobs it runs at once by a factor of ten, with nothing in either
-   * configuration saying so.
+   * writes none, so BullMQ's own default of 1 applies there. Moving a queue
+   * between the two modes therefore changes how many jobs it runs at once by a
+   * factor of ten, with nothing in either configuration saying so.
    *
    * See `workerCount` above for the `workerCount × concurrency` product.
    */
@@ -402,56 +346,32 @@ export interface PsychicBackgroundWorkstreamOptions {
    * milliseconds. Works on open-source BullMQ and on BullMQ Pro.
    *
    * The limit is per queue, not per worker: every one of this workstream's
-   * `workerCount` workers, in every process running it, shares one counter kept
-   * in Redis, so `{ max: 1, duration: 1000 }` means one job per second for the
-   * workstream as a whole. It composes with `concurrency`: `concurrency` caps how
-   * many jobs each worker runs at once, `rateLimit` caps how many jobs may start
-   * per window across the whole workstream. For this workstream's workers it
-   * takes precedence over a global `defaultBullMQWorkerOptions.limiter`.
+   * workers, in every process running it, shares one counter kept in Redis, so
+   * `{ max: 1, duration: 1000 }` means one job per second for the workstream as
+   * a whole. `concurrency` caps how many jobs each worker runs at once;
+   * `rateLimit` caps how many may start per window across the whole workstream.
+   * For this workstream's workers it takes precedence over a global
+   * `defaultBullMQWorkerOptions.limiter`.
    *
-   * A rate limit targets one external limit, so every rate-limited service needs
-   * at least one named workstream of its own, and never the default workstream,
-   * which carries everything else. One workstream per *service* is the floor,
-   * not the rule: where a service meters its endpoints separately — a generous
-   * read limit and a strict write one, say — each limit wants its own
-   * workstream, since a single `rateLimit` cannot describe two of them. Several
-   * backgrounded classes pointed at the same service, even ones extending a
-   * shared base class and differing only in `backgroundJobConfig`, is the
-   * ordinary way to express that. A job on this workstream that is told to slow
-   * down (an
-   * HTTP 429, say) can throw `RateLimitedPsychicJob` from
-   * `@rvoh/psychic-workers/errors` to pause the whole workstream for the
-   * service's retry-after duration without burning a retry attempt. That pause
-   * replaces this window until it ends, the paused job is fetched first
-   * afterwards, and only BullMQ's `maxStartedAttempts` worker option
-   * (`defaultBullMQWorkerOptions: { maxStartedAttempts: 10 }`, say) bounds how
-   * many times one job may cycle through it; set it on any workstream whose
-   * jobs throw the signal.
+   * A job on this workstream that is told to slow down (an HTTP 429, say) can
+   * throw `RateLimitedPsychicJob` from `@rvoh/psychic-workers/errors` to pause
+   * the whole workstream without burning a retry attempt; see that class for
+   * the pause semantics and for the `maxStartedAttempts` bound.
    *
-   * A debounced job on this workstream — one backgrounded with a `jobId` — must
-   * carry a delay long enough that it cannot enqueue faster than this limit
-   * starts jobs, or it is refused at enqueue. The deduplication key lives one
-   * second less than the delay and that is the fastest one `jobId` can produce
-   * work, so the requirement is `delay - 1s >= duration / max`: with
-   * `{ max: 1, duration: 60000 }`, a debounced job needs a 61-second delay.
-   * Without the check a sustained stream of calls would grow a backlog in Redis
-   * that nothing surfaces, since the rate limit keeps the downstream service
-   * safe while it happens. See `DelayedJobOpts` for the full reasoning.
+   * A debounced job on this workstream must carry a delay long enough that it
+   * cannot enqueue faster than this limit starts jobs, or it is refused at
+   * enqueue: see `DelayedJobOpts.jobId`.
    *
    * `max` and `duration` are both required positive integers (`duration` in
-   * milliseconds): a partial limit never rate-limited on either build, and
-   * open-source BullMQ floors a fractional `duration` to 0ms (rate limiting
-   * nothing) and fails every job fetch on one past Redis's integer range. A
-   * `rateLimit` that reaches `connect()` without a positive integer `max` and
-   * `duration` — untyped from a JavaScript config, say, or a fraction the
-   * `number` type admits — fails `connect()` with an error naming the
-   * workstream and the field, before any queue or worker is built.
+   * milliseconds): open-source BullMQ floors a fractional `duration` to 0ms
+   * (rate limiting nothing) and fails every job fetch on one past Redis's
+   * integer range. A `rateLimit` that reaches `connect()` without both fails
+   * `connect()` naming the workstream and the field, before any queue or worker
+   * is built.
    *
-   * Implemented as BullMQ's worker `limiter` option
-   * (https://docs.bullmq.io/guide/rate-limiting). On BullMQ Pro it is
-   * additionally applied as the workstream group's rate limit
-   * (https://docs.bullmq.io/bullmq-pro/groups/rate-limiting) — per Pro's docs;
-   * not verified against an installed Pro build.
+   * Implemented as BullMQ's worker `limiter` option, and on BullMQ Pro also as
+   * the workstream group's rate limit (unverified against an installed Pro
+   * build).
    */
   rateLimit?: {
     max: number
