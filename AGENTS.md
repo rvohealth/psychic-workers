@@ -43,8 +43,9 @@ exception, not a dependency override.
   the supported runtime or peer contract, and do not narrow or widen peer
   ranges without evidence.
 - Before claiming the update works, run a frozen-lockfile install
-  (`pnpm install --frozen-lockfile`), `pnpm build`, `pnpm lint`, the specs, and
-  any relevant integration checks against the resolved graph. A green run
+  (`pnpm install --frozen-lockfile`), `pnpm build`, `pnpm lint`, the specs,
+  `pnpm psy sync` (a new Psychic can regenerate `openapi.json`; CI fails on
+  any sync diff), and any relevant integration checks against the resolved graph. A green run
   against the old lockfile proves nothing.
 - Record intentionally held versions and compatibility limits in
   CHANGELOG/TSDoc.
