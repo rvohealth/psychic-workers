@@ -68,7 +68,7 @@ export default class BaseScheduledService {
     MethodName extends FunctionPropertyNames<Required<T>>,
     MethodFunc extends T[MethodName & keyof T],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    MethodArgs extends MethodFunc extends (...args: any) => any ? Parameters<MethodFunc> : never,
+    MethodArgs extends (MethodFunc extends (...args: any) => any ? Parameters<MethodFunc> : never),
   >(this: T, pattern: string, methodName: MethodName, ...args: MethodArgs) {
     const safeThis: typeof BaseScheduledService = this as typeof BaseScheduledService
 

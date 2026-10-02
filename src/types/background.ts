@@ -118,9 +118,7 @@ export interface DelayedJobDuration {
 }
 
 export type JobTypes =
-  | 'BackgroundJobQueueFunctionJob'
-  | 'BackgroundJobQueueStaticJob'
-  | 'BackgroundJobQueueModelInstanceJob'
+  'BackgroundJobQueueFunctionJob' | 'BackgroundJobQueueStaticJob' | 'BackgroundJobQueueModelInstanceJob'
 
 export type BackgroundQueuePriority = 'default' | 'urgent' | 'not_urgent' | 'last'
 
@@ -153,8 +151,9 @@ interface BaseBackgroundJobConfig {
   // add 'scheduleOpts?: JobSchedulerTemplateOptions'
 }
 
-export interface WorkstreamBackgroundJobConfig<T extends BaseScheduledService | BaseBackgroundedService>
-  extends BaseBackgroundJobConfig {
+export interface WorkstreamBackgroundJobConfig<
+  T extends BaseScheduledService | BaseBackgroundedService,
+> extends BaseBackgroundJobConfig {
   workstream?: T['psychicWorkerTypes']['workstreamNames'][number]
 }
 

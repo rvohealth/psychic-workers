@@ -71,13 +71,11 @@ export default class RateLimitedPsychicJob extends Error {
     super()
 
     // `Number.isFinite` does not coerce, so a non-numeric value fails it too
-    if (
-      !(
-        Number.isFinite(pauseQueueForSeconds) &&
-        pauseQueueForSeconds > 0 &&
-        pauseQueueForSeconds <= Number.MAX_SAFE_INTEGER
-      )
-    ) {
+    if (!(
+      Number.isFinite(pauseQueueForSeconds) &&
+      pauseQueueForSeconds > 0 &&
+      pauseQueueForSeconds <= Number.MAX_SAFE_INTEGER
+    )) {
       throw new RangeError(
         `RateLimitedPsychicJob requires pauseQueueForSeconds to be a positive, finite number of safe magnitude (the number of seconds to pause the queue for); received ${String(pauseQueueForSeconds)}`,
       )

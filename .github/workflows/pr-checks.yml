@@ -38,8 +38,13 @@ jobs:
           fi
 
   uspec:
-    name: Unit tests
+    name: Unit tests (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 26 is the primary target; 24 is the oldest supported runtime
+        node-version: ["26", "24"]
     services:
       postgres:
         image: postgres:13
@@ -79,7 +84,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: ${{ matrix.node-version }}
 
       - run: corepack enable
 
@@ -97,7 +102,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "26"
 
       - run: corepack enable
 
@@ -105,8 +110,12 @@ jobs:
       - run: pnpm lint
 
   check-build:
-    name: Check build
+    name: Check build (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["26", "24"]
     env:
       NODE_ENV: development
       GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -115,12 +124,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: ${{ matrix.node-version }}
 
       - run: corepack enable
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - name: Load the built package as both ESM and CJS
+        run: |
+          for sub in "" /errors /types /utils; do
+            node --input-type=module -e "await import('@rvoh/psychic-workers$sub')"
+            node -e "require('@rvoh/psychic-workers$sub')"
+          done
       - run: pnpm build:test-app
 
   check-no-sync-diff:
@@ -165,6 +180,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
 
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
