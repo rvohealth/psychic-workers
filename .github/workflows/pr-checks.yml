@@ -23,7 +23,7 @@ jobs:
     name: Cooldown exclude allowlist
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: minimumReleaseAgeExclude must be @rvoh/* only
         run: |
           # SECURITY: the minimumReleaseAge cooldown bypass list must stay @rvoh/*
@@ -81,8 +81,8 @@ jobs:
       APP_ENCRYPTION_KEY: ${{ secrets.APP_ENCRYPTION_KEY }}
       LEGACY_APP_ENCRYPTION_KEY: ${{ secrets.LEGACY_APP_ENCRYPTION_KEY }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
 
@@ -99,8 +99,8 @@ jobs:
       NODE_ENV: development
       GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: "26"
 
@@ -121,8 +121,8 @@ jobs:
       GITHUB_OAUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
 
@@ -179,8 +179,8 @@ jobs:
       LEGACY_APP_ENCRYPTION_KEY: ${{ secrets.LEGACY_APP_ENCRYPTION_KEY }}
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: "26"
 
