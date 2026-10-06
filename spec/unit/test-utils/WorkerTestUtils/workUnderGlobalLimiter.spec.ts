@@ -70,7 +70,7 @@ describe('.work on the default workstream under a global defaultBullMQWorkerOpti
     expect(await queue.getFailedCount()).toEqual(0)
 
     // no pause is applied on this path: the throwaway test worker carries no limiter
-    expect(await (await queue.client).pttl(queue.toKey('limiter'))).toEqual(-2)
+    expect(await queue.getRateLimitTtl()).toEqual(-2)
 
     await WorkerTestUtils.clean()
     expect(await queue.getPrioritizedCount()).toEqual(0)

@@ -8,5 +8,11 @@ allowBuilds:
   esbuild: false
   msgpackr-extract: false
   puppeteer: false
-overrides:
-  '@puppeteer/browsers': ^3.2.1
+# pnpm 11 reads installation policy here; retain the .npmrc cooldown and
+# existing first-party exemptions without adding release-specific exceptions.
+minimumReleaseAge: 4320
+minimumReleaseAgeExclude:
+  - '@rvoh/dream'
+  - '@rvoh/psychic'
+  - '@rvoh/dream-spec-helpers'
+  - '@rvoh/psychic-spec-helpers'
