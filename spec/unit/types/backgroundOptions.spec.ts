@@ -5,7 +5,7 @@ import {
   PsychicBackgroundOptions,
 } from '../../../src/types/background.js'
 import DummyService from '../../../test-app/src/app/services/DummyService.js'
-import { fakeRedisConnection, nativeWorkerOptions } from '../../helpers/bullmqRecorders.js'
+import { fakeRedisConnection } from '../../helpers/bullmqRecorders.js'
 
 /**
  * `PsychicBackgroundOptions` and `BackgroundJobConfig` are `Either` unions: the
@@ -87,7 +87,7 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
         defaultQueueOptions: { queueConnection: connection, workerConnection: connection },
         defaultWorkerCount: 2,
         namedQueueOptions: { alpha: {} },
-        namedQueueWorkers: { alpha: nativeWorkerOptions({ workerCount: 1 }) },
+        namedQueueWorkers: { alpha: { workerCount: 1 } },
       },
       // legal in both branches
       providers: { Queue: class {}, Worker: class {} },
@@ -95,17 +95,37 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       defaultBullMQWorkerOptions: { lockDuration: 1000 },
     }
 
-    // `BullMQNativeWorkerOptions extends WorkerOptions` without
-    // `Omit<..., 'connection'>`, so the literal form an app would write does not
-    // compile: every worker entry is required to carry a connection that Psychic
-    // then overwrites. This pins that as current behavior; when `src/` adds the
-    // `Omit`, the directive below goes unused and the build fails, forcing this
-    // example to be updated. The behavioral specs route around it through the
-    // `nativeWorkerOptions()` helper.
+    // Worker options omit connection: Psychic resolves it from queue-side or
+    // app-wide Redis/Cluster instances. Both native placements accept ordinary
+    // literals, including an empty named entry that creates one worker.
     const nativeWorkersWithoutConnection: PsychicBackgroundOptions = {
+      defaultWorkerConnection: connection,
       nativeBullMQ: {
-        // @ts-expect-error namedQueueWorkers entries are required to carry a connection
-        namedQueueWorkers: { alpha: { workerCount: 1 } },
+        defaultWorkerOptions: { concurrency: 10, limiter: { max: 1, duration: 1000 } },
+        namedQueueWorkers: {
+          alpha: {},
+          beta: { workerCount: 2, concurrency: 0, group: { id: 'betaGroup' } },
+        },
+      },
+    }
+
+    const nativeDefaultWorkerConnection: PsychicBackgroundOptions = {
+      nativeBullMQ: {
+        defaultWorkerOptions: {
+          // @ts-expect-error configure workerConnection on queue options, not this literal
+          connection,
+        },
+      },
+    }
+
+    const nativeNamedWorkerConnection: PsychicBackgroundOptions = {
+      nativeBullMQ: {
+        namedQueueWorkers: {
+          alpha: {
+            // @ts-expect-error configure workerConnection on queue options, not this literal
+            connection,
+          },
+        },
       },
     }
 
@@ -198,6 +218,8 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       rateLimitMissingMax,
       native,
       nativeWorkersWithoutConnection,
+      nativeDefaultWorkerConnection,
+      nativeNamedWorkerConnection,
       nativePlusWorkstreams,
       nativePlusDefaultWorkstream,
       simplePlusNative,
@@ -210,6 +232,6 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       priorityOnlyJobConfig,
       unknownWorkstreamJobConfig,
       mixedJobConfig,
-    ]).toHaveLength(21)
+    ]).toHaveLength(23)
   })
 })
