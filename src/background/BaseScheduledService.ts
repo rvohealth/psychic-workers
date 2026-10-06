@@ -51,13 +51,15 @@ export default class BaseScheduledService {
    * ```ts
    * await MySchedulableClass.schedule('0 * * * *', 'myHourlyMethod', 'abc', 123)
    * ```
-   * though calling background must be awaited, the resolution of the promise
-   * is an indication that the job was put in the queue, not that it has
-   * completed.
+   * Awaiting `schedule` confirms that the BullMQ job scheduler has been
+   * registered or updated in Redis. It does not invoke the method inline or
+   * wait for any scheduled run to complete. Independent queue workers may
+   * still execute scheduled runs asynchronously.
    *
-   * NOTE: in test environments, psychic will immediately invoke the underlying
-   * method, preventing you from needing to explicitly wait for queues to flush
-   * before making assertions.
+   * In tests, this registration behavior is the same under both
+   * `testInvocation: 'automatic'` and `testInvocation: 'manual'`. To exercise
+   * the scheduled job, call `WorkerTestUtils.workScheduled()`, or invoke the
+   * method directly to test its body.
    *
    * @param pattern - A cron string representing the time interval you wish this to run on
    * @param methodName - the name of the static method you wish to run in the background

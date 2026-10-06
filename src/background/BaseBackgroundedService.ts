@@ -53,13 +53,13 @@ export default class BaseBackgroundedService {
    * ```ts
    * await MyBackgroundableClass.background('myMethod', 'abc', 123)
    * ```
-   * though calling background must be awaited, the resolution of the promise
-   * is an indication that the job was put in the queue, not that it has
-   * completed.
+   * Outside automatic test invocation, awaiting `background` confirms that
+   * a run is queued or pending, not that the method has completed.
    *
-   * NOTE: in test environments, psychic will immediately invoke the underlying
-   * method, preventing you from needing to explicitly wait for queues to flush
-   * before making assertions.
+   * In tests with `testInvocation: 'automatic'` (the default), Psychic invokes
+   * the method immediately and awaits its completion.
+   * With `testInvocation: 'manual'`, the job is queued for explicit processing
+   * with `WorkerTestUtils.work()`.
    *
    * @param methodName - the name of the static method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
@@ -95,12 +95,13 @@ export default class BaseBackgroundedService {
    * ```ts
    * await MyBackgroundableClass.backgroundWithDelay({ minutes: 5 }, 'myMethod', 'abc', 123)
    * ```
-   * though calling backgroundWithDelay must be awaited, the resolution of the promise
-   * is an indication that a run is pending, not that it has completed.
+   * Outside automatic test invocation, awaiting `backgroundWithDelay` confirms that
+   * a run is queued or pending, not that the method has completed.
    *
-   * NOTE: in test environments, psychic will immediately invoke the underlying
-   * method, preventing you from needing to explicitly wait for queues to flush
-   * before making assertions.
+   * In tests with `testInvocation: 'automatic'` (the default), Psychic invokes
+   * the method immediately and awaits its completion, ignoring the delay.
+   * With `testInvocation: 'manual'`, the job is queued for explicit processing
+   * with `WorkerTestUtils.work()`, or `WorkerTestUtils.workScheduled()` when delayed.
    *
    * @deprecated use `backgroundWith({ delay }, methodName, ...args)` instead. This method will be removed in a future major version.
    *
@@ -146,12 +147,13 @@ export default class BaseBackgroundedService {
    *   123,
    * )
    * ```
-   * though calling backgroundWith must be awaited, the resolution of the promise
-   * is an indication that a run is pending, not that it has completed.
+   * Outside automatic test invocation, awaiting `backgroundWith` confirms that
+   * a run is queued or pending, not that the method has completed.
    *
-   * NOTE: in test environments, psychic will immediately invoke the underlying
-   * method, preventing you from needing to explicitly wait for queues to flush
-   * before making assertions.
+   * In tests with `testInvocation: 'automatic'` (the default), Psychic invokes
+   * the method immediately and awaits its completion, ignoring the delay.
+   * With `testInvocation: 'manual'`, the job is queued for explicit processing
+   * with `WorkerTestUtils.work()`, or `WorkerTestUtils.workScheduled()` when delayed.
    *
    * @param opts - options for backgrounding this job
    * @param opts.delay - (optional) how long you want to hold off before allowing the job to run, given as at least one of `seconds`, `minutes`, `hours` or `days`, plus an optional `jobId` (a deduplication key) which debounces repeated calls into a single run

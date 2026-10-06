@@ -1,7 +1,6 @@
 import { Queue, Worker } from 'bullmq'
 import { Redis } from 'ioredis'
 import { Background } from '../../src/package-exports/index.js'
-import { BullMQNativeWorkerOptions } from '../../src/package-exports/types.js'
 
 /**
  * Test doubles for the BullMQ `Queue` and `Worker` classes, recording the
@@ -204,16 +203,4 @@ export function fakeRedisConnection(label: string): Redis {
     __label: label,
     quit: () => Promise.resolve('OK'),
   } as unknown as Redis
-}
-
-/**
- * `BullMQNativeWorkerOptions` extends BullMQ's `WorkerOptions` without omitting
- * `connection`, so every `namedQueueWorkers` / `defaultWorkerOptions` entry is
- * required to carry a connection that Psychic then overwrites. Specs use this
- * helper to express the config a real app would want to write.
- */
-export function nativeWorkerOptions(
-  options: Omit<Partial<BullMQNativeWorkerOptions>, 'connection'> = {},
-): BullMQNativeWorkerOptions {
-  return options as BullMQNativeWorkerOptions
 }

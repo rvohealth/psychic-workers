@@ -58,12 +58,18 @@ export default class PsychicAppWorkers {
   /**
    * Returns the testInvocation option provided by the user
    *
-   * when "automatic", any backgrounded job will be immediately
-   * invoked during tests. This is the default behavior
+   * With "automatic" (the default), one-off backgrounded jobs invoke their
+   * methods immediately during tests, ignoring delays. The backgrounding call
+   * awaits the method's completion.
    *
-   * when "manual", this will enable the dev to manually interact with
-   * queues, enabling them to target jobs and run them at specific
-   * code points.
+   * With "manual", one-off jobs are queued for explicit processing with
+   * `WorkerTestUtils.work()`, or `WorkerTestUtils.workScheduled()` for delayed
+   * jobs, so tests can choose when to invoke them.
+   *
+   * Under either mode, `schedule()` registers or updates a scheduler in Redis
+   * without invoking the scheduled method inline. Use
+   * `WorkerTestUtils.workScheduled()` to exercise its dispatch, or invoke the
+   * method directly to test its body.
    */
   public get testInvocation() {
     return this._testInvocation
@@ -155,7 +161,17 @@ export interface PsychicWorkersAppHooks {
   workerShutdown: (() => void | Promise<void>)[]
 }
 
-export interface BullMQNativeWorkerOptions extends WorkerOptions {
+/**
+ * Native worker options omit `connection`: Psychic supplies the resolved
+ * queue-side worker connection when constructing each worker. A `connection`
+ * previously supplied here was ignored; deleting it preserves runtime behavior.
+ *
+ * To deliberately configure a worker's Redis/Cluster instance, use
+ * `nativeBullMQ.defaultQueueOptions.workerConnection`,
+ * `nativeBullMQ.namedQueueOptions[name].workerConnection`, or the app-wide
+ * `defaultWorkerConnection`. See {@link QueueOptionsWithConnectionInstance}.
+ */
+export interface BullMQNativeWorkerOptions extends Omit<WorkerOptions, 'connection'> {
   group?: {
     id?: string
     maxSize?: number
@@ -194,6 +210,12 @@ export interface PsychicBackgroundNativeBullMQOptions extends PsychicBackgroundS
    * queue and worker connections.
    */
   defaultQueueConnection?: RedisOrRedisClusterConnection
+  /**
+   * App-wide worker Redis/Cluster instance, used when
+   * `nativeBullMQ.defaultQueueOptions.workerConnection` is omitted. Named queues
+   * inherit that resolved default unless their own queue options provide a
+   * `workerConnection`. Worker-entry `connection` options are never used.
+   */
   defaultWorkerConnection?: RedisOrRedisClusterConnection
 
   nativeBullMQ: {
@@ -260,6 +282,17 @@ export type QueueOptionsWithConnectionInstance = Omit<QueueOptions, 'connection'
    * queue and worker connections.
    */
   queueConnection?: RedisOrRedisClusterConnection
+  /**
+   * Worker Redis/Cluster instance for this queue, not a plain BullMQ connection
+   * options object. In native mode a named queue's value takes precedence over
+   * `nativeBullMQ.defaultQueueOptions.workerConnection`, which takes precedence
+   * over the app-wide `defaultWorkerConnection`.
+   *
+   * This deliberately configures topology; do not move a formerly ignored
+   * worker-entry `connection` here just to migrate its literal. Delete that
+   * property to preserve behavior. Omit worker connections on producer-only
+   * processes; activating workers still requires a resolved instance.
+   */
   workerConnection?: RedisOrRedisClusterConnection | undefined
 }
 

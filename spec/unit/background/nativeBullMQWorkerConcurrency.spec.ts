@@ -2,11 +2,7 @@ import { Redis } from 'ioredis'
 import nameToRedisQueueName from '../../../src/background/helpers/nameToRedisQueueName.js'
 import { Background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
 import { PsychicBackgroundOptions } from '../../../src/types/background.js'
-import {
-  fakeRedisConnection,
-  installBullMQRecorders,
-  nativeWorkerOptions,
-} from '../../helpers/bullmqRecorders.js'
+import { fakeRedisConnection, installBullMQRecorders } from '../../helpers/bullmqRecorders.js'
 
 /**
  * Simple (workstream) mode always writes a `concurrency` onto every worker it
@@ -116,7 +112,7 @@ describe('worker concurrency across the two background configuration modes', () 
         defaultWorkerConnection: workerConnection,
         nativeBullMQ: {
           namedQueueOptions: { snazzy: {} },
-          namedQueueWorkers: { snazzy: nativeWorkerOptions() },
+          namedQueueWorkers: { snazzy: {} },
         },
       })
 
@@ -132,9 +128,9 @@ describe('worker concurrency across the two background configuration modes', () 
         defaultQueueConnection: queueConnection,
         defaultWorkerConnection: workerConnection,
         nativeBullMQ: {
-          defaultWorkerOptions: nativeWorkerOptions({ concurrency: 25 }),
+          defaultWorkerOptions: { concurrency: 25 },
           namedQueueOptions: { snazzy: {} },
-          namedQueueWorkers: { snazzy: nativeWorkerOptions({ concurrency: 5 }) },
+          namedQueueWorkers: { snazzy: { concurrency: 5 } },
         },
       })
 
@@ -147,9 +143,9 @@ describe('worker concurrency across the two background configuration modes', () 
         defaultQueueConnection: queueConnection,
         defaultWorkerConnection: workerConnection,
         nativeBullMQ: {
-          defaultWorkerOptions: nativeWorkerOptions({ concurrency: 0 }),
+          defaultWorkerOptions: { concurrency: 0 },
           namedQueueOptions: { snazzy: {} },
-          namedQueueWorkers: { snazzy: nativeWorkerOptions({ concurrency: 0 }) },
+          namedQueueWorkers: { snazzy: { concurrency: 0 } },
         },
       })
 
@@ -164,7 +160,7 @@ describe('worker concurrency across the two background configuration modes', () 
         defaultWorkerConnection: workerConnection,
         nativeBullMQ: {
           namedQueueOptions: { snazzy: {} },
-          namedQueueWorkers: { snazzy: nativeWorkerOptions() },
+          namedQueueWorkers: { snazzy: {} },
         },
       })
 
