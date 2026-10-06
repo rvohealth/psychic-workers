@@ -58,12 +58,18 @@ export default class PsychicAppWorkers {
   /**
    * Returns the testInvocation option provided by the user
    *
-   * when "automatic", any backgrounded job will be immediately
-   * invoked during tests. This is the default behavior
+   * With "automatic" (the default), one-off backgrounded jobs invoke their
+   * methods immediately during tests, ignoring delays. The backgrounding call
+   * awaits the method's completion.
    *
-   * when "manual", this will enable the dev to manually interact with
-   * queues, enabling them to target jobs and run them at specific
-   * code points.
+   * With "manual", one-off jobs are queued for explicit processing with
+   * `WorkerTestUtils.work()`, or `WorkerTestUtils.workScheduled()` for delayed
+   * jobs, so tests can choose when to invoke them.
+   *
+   * Under either mode, `schedule()` registers or updates a scheduler in Redis
+   * without invoking the scheduled method inline. Use
+   * `WorkerTestUtils.workScheduled()` to exercise its dispatch, or invoke the
+   * method directly to test its body.
    */
   public get testInvocation() {
     return this._testInvocation
