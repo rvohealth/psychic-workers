@@ -33,8 +33,9 @@ exception, not a dependency override.
 
 - Check advisories (`pnpm audit`) and the actual resolved graph after each
   attempt.
-- Respect the repo's `.npmrc` release-age and registry policy, and keep
-  install/security controls (`allowBuilds`, etc.) intact.
+- Respect the repo's release-age policy (`minimumReleaseAge` in
+  `pnpm-workspace.yaml`) and `.npmrc` registry pin, and keep install/security
+  controls (`allowBuilds`, etc.) intact.
 - Keep the pinned `packageManager` version and integrity hash reproducible.
   Evaluate a pnpm/toolchain bump deliberately, especially across majors, rather
   than using one to mask a dependency or local-store problem.
@@ -53,3 +54,13 @@ exception, not a dependency override.
   Node 24 is the oldest supported one (`engines.node: ">=24"`). `@types/node`
   tracks 26, but typings do not prove runtime support, so run the install,
   build, lint, and specs on both Node 24 and Node 26 before claiming either.
+
+## CI Tooling: Industry Standards Only
+
+Use the standard, documented mechanism a tool already provides, such as pnpm's
+`minimumReleaseAge` for dependency cooldowns. Never hand-write CI scripts,
+guards, or harnesses that re-verify a tool's own configuration. If a protection
+needs enforcing against edits to its configuration, use code review, CODEOWNERS,
+or branch protection on the configuration files, not a custom check. An agent
+that believes a custom CI check is needed must stop and ask the owner, naming
+the standard mechanism it could not find.
