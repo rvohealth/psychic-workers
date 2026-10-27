@@ -193,8 +193,8 @@ export interface PsychicBackgroundNativeBullMQOptions extends PsychicBackgroundS
    * See https://docs.bullmq.io/guide/going-to-production for the different settings to use between
    * queue and worker connections.
    */
-  defaultQueueConnection?: RedisOrRedisClusterConnection
-  defaultWorkerConnection?: RedisOrRedisClusterConnection
+  defaultQueueConnection?: RedisOrRedisClusterConnection | undefined
+  defaultWorkerConnection?: RedisOrRedisClusterConnection | undefined
 
   nativeBullMQ: {
     // QueueOptionsWithConnectionInstance instead of QueueOptions because we need to be able to
@@ -259,7 +259,7 @@ export type QueueOptionsWithConnectionInstance = Omit<QueueOptions, 'connection'
    * See https://docs.bullmq.io/guide/going-to-production for the different settings to use between
    * queue and worker connections.
    */
-  queueConnection?: RedisOrRedisClusterConnection
+  queueConnection?: RedisOrRedisClusterConnection | undefined
   workerConnection?: RedisOrRedisClusterConnection | undefined
 }
 

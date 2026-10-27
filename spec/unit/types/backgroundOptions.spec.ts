@@ -109,6 +109,25 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       },
     }
 
+    // a process that only enqueues jobs (a webserver) passes an explicit
+    // undefined worker connection, as simple mode allows; under
+    // exactOptionalPropertyTypes that needs `| undefined` on the native keys
+    const nativeWithoutWorkers: PsychicBackgroundOptions = {
+      defaultQueueConnection: connection,
+      defaultWorkerConnection: undefined,
+      nativeBullMQ: {},
+    }
+
+    // every native connection key accepts an explicit undefined, so a
+    // conditionally supplied connection reads the same at each level
+    const nativeConnectionsGivenAsUndefined: PsychicBackgroundOptions = {
+      defaultQueueConnection: undefined,
+      defaultWorkerConnection: undefined,
+      nativeBullMQ: {
+        defaultQueueOptions: { queueConnection: undefined, workerConnection: undefined },
+      },
+    }
+
     ///////////////////
     // the exclusion //
     ///////////////////
@@ -198,6 +217,8 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       rateLimitMissingMax,
       native,
       nativeWorkersWithoutConnection,
+      nativeWithoutWorkers,
+      nativeConnectionsGivenAsUndefined,
       nativePlusWorkstreams,
       nativePlusDefaultWorkstream,
       simplePlusNative,
@@ -210,6 +231,6 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       priorityOnlyJobConfig,
       unknownWorkstreamJobConfig,
       mixedJobConfig,
-    ]).toHaveLength(21)
+    ]).toHaveLength(23)
   })
 })
