@@ -144,11 +144,6 @@ Supply-chain settings (see also [SECURITY.md](./SECURITY.md)):
 - `CHANGELOG.md` has one `## x.y.z` section per release. Bullets usually
   start with the kind of change (`fix:`, `maintenance:`, `docs:`, `add ...`)
   and spell out any behavior a consumer must adapt to.
-- **Breaking changes**: a change that makes any existing caller stop compiling
-  or behave differently, including removing a default or making an option
-  required, is breaking. It needs the maintainers' approval and a major
-  version. See [AGENTS.md](./AGENTS.md#breaking-changes) for what counts and
-  how to check.
 - **Public error exports** (`@rvoh/psychic-workers/errors`): export an error
   only when a Psychic application developer needs to throw it, or should
   reasonably catch it, as part of a normal application workflow. Being useful
