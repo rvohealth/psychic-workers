@@ -2,11 +2,7 @@ import { Redis } from 'ioredis'
 import nameToRedisQueueName from '../../../src/background/helpers/nameToRedisQueueName.js'
 import { Background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
 import { PsychicBackgroundOptions } from '../../../src/types/background.js'
-import {
-  fakeRedisConnection,
-  installBullMQRecorders,
-  nativeWorkerOptions,
-} from '../../helpers/bullmqRecorders.js'
+import { fakeRedisConnection, installBullMQRecorders } from '../../helpers/bullmqRecorders.js'
 
 describe('Background#nativeBullMQConnect named queues', () => {
   const bullmq = installBullMQRecorders()
@@ -71,7 +67,7 @@ describe('Background#nativeBullMQConnect named queues', () => {
 
     context('when namedQueueWorkers has an empty entry for the queue', () => {
       it('builds a single worker', () => {
-        connectWithNamedQueueWorkers({ alpha: nativeWorkerOptions() })
+        connectWithNamedQueueWorkers({ alpha: {} })
 
         expect(workersFor('alpha').length).toEqual(1)
       })
@@ -79,7 +75,7 @@ describe('Background#nativeBullMQConnect named queues', () => {
 
     context('when namedQueueWorkers explicitly sets workerCount to 0', () => {
       it('builds zero workers', () => {
-        connectWithNamedQueueWorkers({ alpha: nativeWorkerOptions({ workerCount: 0 }) })
+        connectWithNamedQueueWorkers({ alpha: { workerCount: 0 } })
 
         expect(workersFor('alpha').length).toEqual(0)
       })
@@ -87,7 +83,7 @@ describe('Background#nativeBullMQConnect named queues', () => {
 
     context('when namedQueueWorkers sets a workerCount', () => {
       it('builds that many workers', () => {
-        connectWithNamedQueueWorkers({ alpha: nativeWorkerOptions({ workerCount: 4 }) })
+        connectWithNamedQueueWorkers({ alpha: { workerCount: 4 } })
 
         expect(workersFor('alpha').length).toEqual(4)
       })
@@ -99,7 +95,7 @@ describe('Background#nativeBullMQConnect named queues', () => {
       const backgroundInstance = connectNative({
         nativeBullMQ: {
           namedQueueOptions: { alpha: {} },
-          namedQueueWorkers: { alpha: nativeWorkerOptions(), ghost: nativeWorkerOptions({ workerCount: 5 }) },
+          namedQueueWorkers: { alpha: {}, ghost: { workerCount: 5 } },
         },
         defaultQueueConnection: queueConnection,
         defaultWorkerConnection: workerConnection,
@@ -123,8 +119,8 @@ describe('Background#nativeBullMQConnect named queues', () => {
         nativeBullMQ: {
           namedQueueOptions: { alpha: {}, beta: {} },
           namedQueueWorkers: {
-            alpha: nativeWorkerOptions({ group: { id: 'alphaGroup' } }),
-            beta: nativeWorkerOptions(),
+            alpha: { group: { id: 'alphaGroup' } },
+            beta: {},
           },
         },
         defaultQueueConnection: queueConnection,
@@ -197,7 +193,7 @@ describe('Background#nativeBullMQConnect named queues', () => {
         nativeBullMQ: {
           namedQueueOptions: { alpha: { workerConnection: namedWorkerConnection } },
           namedQueueWorkers: {
-            alpha: nativeWorkerOptions({ lockDuration: 2222, group: { id: 'alphaGroup' } }),
+            alpha: { lockDuration: 2222, group: { id: 'alphaGroup' } },
           },
         },
         defaultQueueConnection: queueConnection,
@@ -216,7 +212,7 @@ describe('Background#nativeBullMQConnect named queues', () => {
       connectNative({
         nativeBullMQ: {
           namedQueueOptions: { alpha: {} },
-          namedQueueWorkers: { alpha: nativeWorkerOptions({ workerCount: 2 }) },
+          namedQueueWorkers: { alpha: { workerCount: 2 } },
         },
         defaultQueueConnection: queueConnection,
         defaultWorkerConnection: workerConnection,

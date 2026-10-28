@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict'
 import { PsychicApp } from '@rvoh/psychic'
 import { Job, RateLimitError, Worker } from 'bullmq'
 import parallelTestSafeQueueName from '../../../src/background/helpers/parallelTestSafeQueueName.js'
@@ -79,6 +80,7 @@ describe('a real worker carrying a limiter, when its job throws RateLimitedPsych
     const rateLimitSpy = vi.spyOn(queue, 'rateLimit')
 
     const job = await worker.getNextJob(LOCK_TOKEN)
+    assert(job)
     expect(job).toBeInstanceOf(Job)
     expect(await job.getState()).toEqual('active')
 
@@ -99,7 +101,7 @@ describe('a real worker carrying a limiter, when its job throws RateLimitedPsych
     expect(pauseMs).toEqual(PAUSE_QUEUE_FOR_SECONDS * 1000)
     expect(Number.isSafeInteger(pauseMs) && pauseMs > 0).toBe(true)
 
-    const limiterTtl = await (await queue.client).pttl(queue.toKey('limiter'))
+    const limiterTtl = await queue.getRateLimitTtl()
     expect(limiterTtl).toBeGreaterThan(PAUSE_QUEUE_FOR_SECONDS * 1000 - 1000)
     expect(limiterTtl).toBeLessThanOrEqual(PAUSE_QUEUE_FOR_SECONDS * 1000)
 
@@ -126,6 +128,7 @@ describe('a real worker carrying a limiter, when its job throws RateLimitedPsych
     const rateLimitSpy = vi.spyOn(queue, 'rateLimit')
 
     const job = await worker.getNextJob(LOCK_TOKEN)
+    assert(job)
     expect(job).toBeInstanceOf(Job)
 
     // the processor itself, so the error it throws is observable rather than
@@ -145,7 +148,7 @@ describe('a real worker carrying a limiter, when its job throws RateLimitedPsych
     const [pauseMs] = rateLimitSpy.mock.calls[0]!
     expect(pauseMs).toEqual(3000)
 
-    const limiterTtl = await (await queue.client).pttl(queue.toKey('limiter'))
+    const limiterTtl = await queue.getRateLimitTtl()
     expect(limiterTtl).toBeGreaterThan(2000)
     expect(limiterTtl).toBeLessThanOrEqual(3000)
 

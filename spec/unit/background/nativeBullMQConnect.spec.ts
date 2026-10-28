@@ -5,11 +5,7 @@ import ActivatingBackgroundWorkersWithoutDefaultWorkerConnection from '../../../
 import DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../../../src/error/background/DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
 import { Background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
 import { PsychicBackgroundOptions } from '../../../src/types/background.js'
-import {
-  fakeRedisConnection,
-  installBullMQRecorders,
-  nativeWorkerOptions,
-} from '../../helpers/bullmqRecorders.js'
+import { fakeRedisConnection, installBullMQRecorders } from '../../helpers/bullmqRecorders.js'
 
 describe('Background#nativeBullMQConnect', () => {
   const bullmq = installBullMQRecorders()
@@ -209,7 +205,7 @@ describe('Background#nativeBullMQConnect', () => {
       connectNative(
         {
           defaultBullMQWorkerOptions: { lockDuration: 1111, maxStalledCount: 7 },
-          nativeBullMQ: { defaultWorkerOptions: nativeWorkerOptions({ lockDuration: 2222 }) },
+          nativeBullMQ: { defaultWorkerOptions: { lockDuration: 2222 } },
           defaultQueueConnection: queueConnection,
           defaultWorkerConnection: workerConnection,
         },
@@ -424,7 +420,7 @@ describe('Background#nativeBullMQConnect', () => {
           {
             nativeBullMQ: {
               namedQueueOptions: { alpha: {} },
-              namedQueueWorkers: { alpha: nativeWorkerOptions() },
+              namedQueueWorkers: { alpha: {} },
             },
             defaultQueueConnection: queueConnection,
             defaultWorkerConnection: workerConnection,

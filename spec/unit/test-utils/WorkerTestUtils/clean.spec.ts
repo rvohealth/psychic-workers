@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict'
 import { Job, Worker, WorkerOptions } from 'bullmq'
 import background from '../../../../src/background/index.js'
 import PsychicAppWorkers, {
@@ -67,6 +68,7 @@ describe('.clean', () => {
 
       try {
         const job = await worker.getNextJob('clean-spec-lock-token')
+        assert(job)
         expect(await job.getState()).toEqual('active')
 
         // the lock is live, so this job is someone's work in progress

@@ -4,11 +4,7 @@ import ASTWorkersSchemaBuilder from '../../../src/cli/ASTWorkersSchemaBuilder.js
 import DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection from '../../../src/error/background/DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection.js'
 import { Background, background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
 import { PsychicBackgroundOptions } from '../../../src/types/background.js'
-import {
-  fakeRedisConnection,
-  installBullMQRecorders,
-  nativeWorkerOptions,
-} from '../../helpers/bullmqRecorders.js'
+import { fakeRedisConnection, installBullMQRecorders } from '../../helpers/bullmqRecorders.js'
 
 /**
  * `pnpm psy sync` builds src/types/workers.ts by connecting the `background`
@@ -86,8 +82,8 @@ describe('ASTWorkersSchemaBuilder#build', () => {
         nativeBullMQ: {
           namedQueueOptions: { alpha: {}, beta: {} },
           namedQueueWorkers: {
-            alpha: nativeWorkerOptions({ group: { id: 'alphaGroup' } }),
-            beta: nativeWorkerOptions(),
+            alpha: { group: { id: 'alphaGroup' } },
+            beta: {},
           },
         },
       })
