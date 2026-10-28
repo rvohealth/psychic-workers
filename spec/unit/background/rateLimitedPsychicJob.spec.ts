@@ -7,12 +7,7 @@ import { RateLimitedPsychicJob } from '../../../src/package-exports/errors.js'
 import { Background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
 import { BackgroundJobConfig, PsychicBackgroundOptions } from '../../../src/types/background.js'
 import DummyService from '../../../test-app/src/app/services/DummyService.js'
-import {
-  fakeRedisConnection,
-  installBullMQRecorders,
-  nativeWorkerOptions,
-  RecordingQueue,
-} from '../../helpers/bullmqRecorders.js'
+import { fakeRedisConnection, installBullMQRecorders, RecordingQueue } from '../../helpers/bullmqRecorders.js'
 
 const PAUSE_QUEUE_FOR_SECONDS = 5
 
@@ -289,7 +284,7 @@ describe('RateLimitedPsychicJob', () => {
             defaultWorkerConnection: workerConnection,
             nativeBullMQ: {
               namedQueueOptions: { beta: {} },
-              namedQueueWorkers: { beta: nativeWorkerOptions({ limiter: { max: 1, duration: 1000 } }) },
+              namedQueueWorkers: { beta: { limiter: { max: 1, duration: 1000 } } },
             },
           })
 
@@ -304,7 +299,7 @@ describe('RateLimitedPsychicJob', () => {
             defaultWorkerConnection: workerConnection,
             nativeBullMQ: {
               namedQueueOptions: { beta: {} },
-              namedQueueWorkers: { beta: nativeWorkerOptions() },
+              namedQueueWorkers: { beta: {} },
             },
           })
 
@@ -323,7 +318,7 @@ describe('RateLimitedPsychicJob', () => {
             defaultQueueConnection: queueConnection,
             defaultWorkerConnection: workerConnection,
             nativeBullMQ: {
-              defaultWorkerOptions: nativeWorkerOptions({ limiter: { max: 1, duration: 1000 } }),
+              defaultWorkerOptions: { limiter: { max: 1, duration: 1000 } },
             },
           })
 
@@ -451,8 +446,8 @@ describe('RateLimitedPsychicJob', () => {
           nativeBullMQ: {
             namedQueueOptions: { limited: {}, unlimited: {} },
             namedQueueWorkers: {
-              limited: nativeWorkerOptions({ limiter: { max: 1, duration: 1000 } }),
-              unlimited: nativeWorkerOptions(),
+              limited: { limiter: { max: 1, duration: 1000 } },
+              unlimited: {},
             },
           },
         })
@@ -482,7 +477,7 @@ describe('RateLimitedPsychicJob', () => {
         const limitedDefault = connectWithoutWorkers({
           defaultQueueConnection: queueConnection,
           nativeBullMQ: {
-            defaultWorkerOptions: nativeWorkerOptions({ limiter: { max: 1, duration: 1000 } }),
+            defaultWorkerOptions: { limiter: { max: 1, duration: 1000 } },
           },
         })
 

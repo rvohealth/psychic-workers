@@ -5,11 +5,7 @@ import NoQueueForSpecifiedWorkstream from '../../../src/error/background/NoQueue
 import { Background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
 import { BackgroundJobConfig, PsychicBackgroundOptions } from '../../../src/types/background.js'
 import DummyService from '../../../test-app/src/app/services/DummyService.js'
-import {
-  fakeRedisConnection,
-  installBullMQRecorders,
-  nativeWorkerOptions,
-} from '../../helpers/bullmqRecorders.js'
+import { fakeRedisConnection, installBullMQRecorders } from '../../helpers/bullmqRecorders.js'
 
 describe('Background#queueInstance routing in native BullMQ mode', () => {
   const bullmq = installBullMQRecorders()
@@ -23,7 +19,7 @@ describe('Background#queueInstance routing in native BullMQ mode', () => {
     defaultWorkerConnection: workerConnection,
     nativeBullMQ: {
       namedQueueOptions: { alpha: {}, beta: {} },
-      namedQueueWorkers: { alpha: nativeWorkerOptions(), beta: nativeWorkerOptions() },
+      namedQueueWorkers: { alpha: {}, beta: {} },
     },
   })
 

@@ -1,3 +1,5 @@
+import { Redis } from 'ioredis'
+import assert from 'node:assert/strict'
 import background from '../../../src/background/index.js'
 import PsychicAppWorkers, {
   PsychicWorkersAppTestInvocationType,
@@ -71,6 +73,7 @@ describe('the debounce key margin, against a real Redis', () => {
   it('expires a margin before the job fires, so a late call enqueues rather than being swallowed', async () => {
     const queue = defaultQueue()
     const client = await queue.client
+    assert(client instanceof Redis)
     const deduplicationKey = `${queue.toKey('de')}:${JOB_ID}`
     const delayedKey = queue.toKey('delayed')
 

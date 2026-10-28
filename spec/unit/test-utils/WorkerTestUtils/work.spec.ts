@@ -96,7 +96,7 @@ describe('.work', () => {
     }
 
     async function limiterKeyTtl(queue: Queue) {
-      return (await queue.client).pttl(queue.toKey('limiter'))
+      return queue.getRateLimitTtl()
     }
 
     context('on a named workstream whose workers carry a limiter (snazzy sets rateLimit)', () => {

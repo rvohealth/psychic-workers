@@ -27,6 +27,29 @@ describe('.work', () => {
     workersApp.set('testInvocation', originalTestInvocation)
   })
 
+  context('with automatic test invocation', () => {
+    beforeEach(() => {
+      PsychicAppWorkers.getOrFail().set('testInvocation', 'automatic')
+    })
+
+    afterEach(async () => {
+      await WorkerTestUtils.clean()
+    })
+
+    it('registers a real scheduler and invokes its method only when worked', async () => {
+      const scheduledSpy = vi.spyOn(DummyScheduledService, 'classRunInBg').mockResolvedValue(undefined)
+
+      await DummyScheduledService.schedule('0 * * * *', 'classRunInBg', 'automatic scheduled message')
+
+      expect(scheduledSpy).not.toHaveBeenCalled()
+
+      await WorkerTestUtils.workScheduled()
+
+      expect(scheduledSpy).toHaveBeenCalledTimes(1)
+      expect(scheduledSpy).toHaveBeenCalledWith('automatic scheduled message', expect.any(Job))
+    })
+  })
+
   context('with no scheduled jobs', () => {
     it('does not call any scheduled methods, nor any other queued jobs, but also does not stall', async () => {
       const serviceSpy = vi.spyOn(DummyService, 'classRunInBG').mockImplementation(async () => {})
