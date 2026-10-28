@@ -8,16 +8,29 @@ import DummyService from '../../../test-app/src/app/services/DummyService.js'
 import { fakeRedisConnection, nativeWorkerOptions } from '../../helpers/bullmqRecorders.js'
 
 /**
+ * What this spec is for: it pins which background configuration shapes an app
+ * can write and which it cannot. If a change to the option types starts rejecting
+ * a config an app can write today, existing apps stop compiling. If it starts
+ * accepting one that misbehaves at runtime, the mistake reaches production. In
+ * either case, `pnpm build:test-app` fails here.
+ *
  * `PsychicBackgroundOptions` and `BackgroundJobConfig` are `Either` unions: the
  * simple (workstream) keys and the native BullMQ keys are mutually exclusive,
  * enforced by typing each branch's foreign keys as `never`.
  *
- * The assertions below are compile-time only. Every `@ts-expect-error` fails the
- * build if the line it precedes stops being an error, so `pnpm build:test-app`
- * (which type checks this directory, unlike `pnpm build`) is what actually runs
- * them — that is the command CI runs in the check-build job.
- * The one runtime expectation exists so vitest has a test to report on.
+ * Every check below is compile-time only. Each case passes its literal to a
+ * function typed with the option type, through `expectTypeOf(...).toBeCallableWith`,
+ * so the literal is contextually typed and excess-property checked as an app's
+ * own config literal is. A rejected case carries `@ts-expect-error`, which fails
+ * the build if the line stops being an error. `pnpm build:test-app` (which type
+ * checks this directory, unlike `pnpm build`) is what actually runs them; CI's
+ * check-build job runs it. Vitest strips types, so `pnpm uspec` passes this file
+ * whatever the types say.
  */
+const backgroundOptions = (options: PsychicBackgroundOptions) => options
+const backgroundWithOpts = (opts: BackgroundWithOpts) => opts
+const jobConfig = (config: BackgroundJobConfig<DummyService>) => config
+
 describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
   const connection: Redis = fakeRedisConnection('connection')
 
@@ -25,7 +38,7 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
     /////////////////////////////
     // simple (workstream) mode //
     /////////////////////////////
-    const simple: PsychicBackgroundOptions = {
+    expectTypeOf(backgroundOptions).toBeCallableWith({
       defaultQueueConnection: connection,
       defaultWorkerConnection: connection,
       defaultWorkstream: { workerCount: 2, concurrency: 25 },
@@ -34,53 +47,53 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       providers: { Queue: class {}, Worker: class {} },
       defaultBullMQQueueOptions: { defaultJobOptions: { attempts: 3 } },
       defaultBullMQWorkerOptions: { lockDuration: 1000 },
-    }
+    })
 
     // defaultWorkerConnection is only optional in value, not in presence: it may
     // be undefined (e.g. on a webserver), but the key must be there
-    const simpleWithoutWorkers: PsychicBackgroundOptions = {
+    expectTypeOf(backgroundOptions).toBeCallableWith({
       defaultQueueConnection: connection,
       defaultWorkerConnection: undefined,
-    }
+    })
 
-    // @ts-expect-error simple mode requires defaultQueueConnection
-    const simpleMissingQueueConnection: PsychicBackgroundOptions = {
-      defaultWorkerConnection: connection,
-    }
+    expectTypeOf(backgroundOptions).toBeCallableWith(
+      // @ts-expect-error simple mode requires defaultQueueConnection
+      { defaultWorkerConnection: connection },
+    )
 
-    // @ts-expect-error simple mode requires the defaultWorkerConnection key to be present
-    const simpleMissingWorkerConnectionKey: PsychicBackgroundOptions = {
-      defaultQueueConnection: connection,
-    }
+    expectTypeOf(backgroundOptions).toBeCallableWith(
+      // @ts-expect-error simple mode requires the defaultWorkerConnection key to be present
+      { defaultQueueConnection: connection },
+    )
 
     // a named workstream's `rateLimit` is optional, but when present both
     // `max` and `duration` are required: open-source BullMQ passes them
     // unvalidated into its Lua scripts, where a missing `duration` breaks the
     // job fetch, so a partial rate limit is rejected at compile time instead
-    const rateLimitedWorkstream: PsychicBackgroundOptions = {
+    expectTypeOf(backgroundOptions).toBeCallableWith({
       defaultQueueConnection: connection,
       defaultWorkerConnection: connection,
       namedWorkstreams: [{ name: 'snazzy', rateLimit: { max: 1, duration: 1000 } }],
-    }
+    })
 
-    const rateLimitMissingDuration: PsychicBackgroundOptions = {
+    expectTypeOf(backgroundOptions).toBeCallableWith({
       defaultQueueConnection: connection,
       defaultWorkerConnection: connection,
       // @ts-expect-error rateLimit requires duration alongside max
       namedWorkstreams: [{ name: 'snazzy', rateLimit: { max: 1 } }],
-    }
+    })
 
-    const rateLimitMissingMax: PsychicBackgroundOptions = {
+    expectTypeOf(backgroundOptions).toBeCallableWith({
       defaultQueueConnection: connection,
       defaultWorkerConnection: connection,
       // @ts-expect-error rateLimit requires max alongside duration
       namedWorkstreams: [{ name: 'snazzy', rateLimit: { duration: 1000 } }],
-    }
+    })
 
     ///////////////////////
     // native BullMQ mode //
     ///////////////////////
-    const native: PsychicBackgroundOptions = {
+    expectTypeOf(backgroundOptions).toBeCallableWith({
       // both connections are optional in native mode, since a connection may
       // arrive per named queue instead
       nativeBullMQ: {
@@ -93,7 +106,7 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
       providers: { Queue: class {}, Worker: class {} },
       defaultBullMQQueueOptions: { defaultJobOptions: { attempts: 3 } },
       defaultBullMQWorkerOptions: { lockDuration: 1000 },
-    }
+    })
 
     // `BullMQNativeWorkerOptions extends WorkerOptions` without
     // `Omit<..., 'connection'>`, so the literal form an app would write does not
@@ -102,56 +115,62 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
     // `Omit`, the directive below goes unused and the build fails, forcing this
     // example to be updated. The behavioral specs route around it through the
     // `nativeWorkerOptions()` helper.
-    const nativeWorkersWithoutConnection: PsychicBackgroundOptions = {
+    expectTypeOf(backgroundOptions).toBeCallableWith({
       nativeBullMQ: {
         // @ts-expect-error namedQueueWorkers entries are required to carry a connection
         namedQueueWorkers: { alpha: { workerCount: 1 } },
       },
-    }
+    })
 
     // a process that only enqueues jobs (a webserver) passes an explicit
     // undefined worker connection, as simple mode allows; under
     // exactOptionalPropertyTypes that needs `| undefined` on the native keys
-    const nativeWithoutWorkers: PsychicBackgroundOptions = {
+    expectTypeOf(backgroundOptions).toBeCallableWith({
       defaultQueueConnection: connection,
       defaultWorkerConnection: undefined,
       nativeBullMQ: {},
-    }
+    })
 
     // every native connection key accepts an explicit undefined, so a
     // conditionally supplied connection reads the same at each level
-    const nativeConnectionsGivenAsUndefined: PsychicBackgroundOptions = {
+    expectTypeOf(backgroundOptions).toBeCallableWith({
       defaultQueueConnection: undefined,
       defaultWorkerConnection: undefined,
       nativeBullMQ: {
         defaultQueueOptions: { queueConnection: undefined, workerConnection: undefined },
       },
-    }
+    })
 
     ///////////////////
     // the exclusion //
     ///////////////////
-    // @ts-expect-error namedWorkstreams is typed `never` in the native branch
-    const nativePlusWorkstreams: PsychicBackgroundOptions = {
-      nativeBullMQ: {},
-      defaultQueueConnection: connection,
-      namedWorkstreams: [{ name: 'snazzy' }],
-    }
+    expectTypeOf(backgroundOptions).toBeCallableWith(
+      // @ts-expect-error namedWorkstreams is typed `never` in the native branch
+      {
+        nativeBullMQ: {},
+        defaultQueueConnection: connection,
+        namedWorkstreams: [{ name: 'snazzy' }],
+      },
+    )
 
-    // @ts-expect-error defaultWorkstream is typed `never` in the native branch
-    const nativePlusDefaultWorkstream: PsychicBackgroundOptions = {
-      nativeBullMQ: {},
-      defaultQueueConnection: connection,
-      defaultWorkstream: { workerCount: 1 },
-    }
+    expectTypeOf(backgroundOptions).toBeCallableWith(
+      // @ts-expect-error defaultWorkstream is typed `never` in the native branch
+      {
+        nativeBullMQ: {},
+        defaultQueueConnection: connection,
+        defaultWorkstream: { workerCount: 1 },
+      },
+    )
 
-    // @ts-expect-error nativeBullMQ is typed `never` in the simple branch
-    const simplePlusNative: PsychicBackgroundOptions = {
-      defaultQueueConnection: connection,
-      defaultWorkerConnection: connection,
-      namedWorkstreams: [{ name: 'snazzy' }],
-      nativeBullMQ: {},
-    }
+    expectTypeOf(backgroundOptions).toBeCallableWith(
+      // @ts-expect-error nativeBullMQ is typed `never` in the simple branch
+      {
+        defaultQueueConnection: connection,
+        defaultWorkerConnection: connection,
+        namedWorkstreams: [{ name: 'snazzy' }],
+        nativeBullMQ: {},
+      },
+    )
 
     //////////////////////////////
     // delay options (debounce) //
@@ -163,22 +182,25 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
     // compile errors. The narrowing deliberately lands on `DelayedJobOpts`
     // rather than on `DelayedJobDuration`, which must stay all-optional
     // because `durationToSeconds` takes it.
-    const delayWithDuration: BackgroundWithOpts = { delay: { seconds: 10, jobId: 'x' } }
-    const delayWithDurationOnly: BackgroundWithOpts = { delay: { minutes: 1 } }
+    expectTypeOf(backgroundWithOpts).toBeCallableWith({ delay: { seconds: 10, jobId: 'x' } })
+    expectTypeOf(backgroundWithOpts).toBeCallableWith({ delay: { minutes: 1 } })
 
-    const delayWithoutDuration: BackgroundWithOpts = {
+    expectTypeOf(backgroundWithOpts).toBeCallableWith({
       // @ts-expect-error a delay must carry at least one time component
       delay: {},
-    }
+    })
 
-    const delayWithJobIdOnly: BackgroundWithOpts = {
+    expectTypeOf(backgroundWithOpts).toBeCallableWith({
       // @ts-expect-error a jobId is not a time component; a delay still needs one
       delay: { jobId: 'x' },
-    }
+    })
 
-    // never invoked — declared only so the compiler checks the call signature
-    // of `backgroundWithDelay`, which takes a `DelayedJobOpts` directly
-    const backgroundWithDelayCallSignature = async () => {
+    // `backgroundWithDelay` takes a `DelayedJobOpts` directly, so the same
+    // narrowing applies to its first argument. It is generic over `this`, which
+    // `expectTypeOf` cannot see through, so these are real calls in a function
+    // that is type checked but never invoked.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async function backgroundWithDelayCalls() {
       await DummyService.backgroundWithDelay({ seconds: 10, jobId: 'x' }, 'classRunInBG', 'bottlearum')
       // @ts-expect-error a delay must carry at least one time component
       await DummyService.backgroundWithDelay({}, 'classRunInBG', 'bottlearum')
@@ -189,48 +211,18 @@ describe('PsychicBackgroundOptions and BackgroundJobConfig exclusivity', () => {
     ////////////////////////
     // BackgroundJobConfig //
     ////////////////////////
-    const workstreamJobConfig: BackgroundJobConfig<DummyService> = {
-      workstream: 'snazzy',
-      priority: 'urgent',
-    }
+    expectTypeOf(jobConfig).toBeCallableWith({ workstream: 'snazzy', priority: 'urgent' })
+    expectTypeOf(jobConfig).toBeCallableWith({ priority: 'last' })
 
-    const priorityOnlyJobConfig: BackgroundJobConfig<DummyService> = { priority: 'last' }
-
-    const unknownWorkstreamJobConfig: BackgroundJobConfig<DummyService> = {
+    expectTypeOf(jobConfig).toBeCallableWith({
       // @ts-expect-error only synced workstream names are assignable
       workstream: 'ghost',
-    }
+    })
 
-    const mixedJobConfig: BackgroundJobConfig<DummyService> = {
+    expectTypeOf(jobConfig).toBeCallableWith({
       workstream: 'snazzy',
       // @ts-expect-error queue is typed `never` alongside workstream
       queue: 'snazzy',
-    }
-
-    expect([
-      simple,
-      simpleWithoutWorkers,
-      simpleMissingQueueConnection,
-      simpleMissingWorkerConnectionKey,
-      rateLimitedWorkstream,
-      rateLimitMissingDuration,
-      rateLimitMissingMax,
-      native,
-      nativeWorkersWithoutConnection,
-      nativeWithoutWorkers,
-      nativeConnectionsGivenAsUndefined,
-      nativePlusWorkstreams,
-      nativePlusDefaultWorkstream,
-      simplePlusNative,
-      delayWithDuration,
-      delayWithDurationOnly,
-      delayWithoutDuration,
-      delayWithJobIdOnly,
-      backgroundWithDelayCallSignature,
-      workstreamJobConfig,
-      priorityOnlyJobConfig,
-      unknownWorkstreamJobConfig,
-      mixedJobConfig,
-    ]).toHaveLength(23)
+    })
   })
 })
