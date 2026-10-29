@@ -51,6 +51,9 @@ export default class BaseScheduledService {
    * ```ts
    * await MySchedulableClass.schedule('0 * * * *', 'myHourlyMethod', 'abc', 123)
    * ```
+   * The cron `pattern` is evaluated in UTC, independent of the worker
+   * process's time zone. For example, `'0 9 * * *'` runs daily at 09:00 UTC.
+   *
    * Awaiting `schedule` confirms that the BullMQ job scheduler has been
    * registered or updated in Redis. It does not invoke the method inline or
    * wait for any scheduled run to complete. Independent queue workers may
@@ -61,7 +64,7 @@ export default class BaseScheduledService {
    * the scheduled job, call `WorkerTestUtils.workScheduled()`, or invoke the
    * method directly to test its body.
    *
-   * @param pattern - A cron string representing the time interval you wish this to run on
+   * @param pattern - A cron string evaluated in UTC, representing the time interval you wish this to run on
    * @param methodName - the name of the static method you wish to run in the background
    * @param args - a variadic list of arguments to be sent to your method
    */

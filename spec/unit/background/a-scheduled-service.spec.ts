@@ -42,7 +42,7 @@ describe('a scheduled service', () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(background.queues[0]!.upsertJobScheduler).toHaveBeenCalledWith(
         scheduledId,
-        { pattern: '* * * * *' },
+        { pattern: '* * * * *', tz: 'UTC' },
         {
           name: 'BackgroundJobQueueStaticJob',
           // DefaultDummyScheduledService configures no priority, so the scheduler

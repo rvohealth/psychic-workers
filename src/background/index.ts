@@ -943,7 +943,7 @@ export class Background {
    * to be scheduled to run at a specified cron pattern
    *
    * @param ObjectClass - the class you wish to background
-   * @param pattern - the cron string you wish to use to govern the scheduling for this job
+   * @param pattern - the cron string, evaluated in UTC, governing the scheduling for this job
    * @param method - the method you wish to background
    * @param globalName - the globalName of the class you are processing
    * @param args - (optional) a list of arguments to provide to your method when it is called
@@ -976,7 +976,7 @@ export class Background {
 
     await queueInstance.upsertJobScheduler(
       schedulerId,
-      { pattern },
+      { pattern, tz: 'UTC' },
       {
         name: 'BackgroundJobQueueStaticJob',
 
