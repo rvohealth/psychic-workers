@@ -1,5 +1,19 @@
 # AGENTS.md - AI Agent Instructions
 
+## Starting a Branch
+
+Before creating a branch from `origin/main`, fetch and check whether the
+branch currently checked out holds work that is not on `main` yet. Its work is
+already merged when `git merge-base --is-ancestor HEAD origin/main` succeeds,
+or when its PR shows `state` `MERGED` and a `headRefOid` equal to `HEAD`
+(`gh pr view --json state,headRefOid`). Uncommitted changes are unmerged work.
+
+- If the work is already merged, check out the new branch from `origin/main`.
+- Otherwise, stop and ask the user whether to continue from `origin/main` or
+  from the current local branch. Do not choose either on your own: starting
+  from `origin/main` silently drops the unmerged work, and continuing locally
+  stacks the new work onto an unmerged PR.
+
 ## Public Error Exports
 
 Export an error only when a developer of a Psychic application needs to throw
