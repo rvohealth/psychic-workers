@@ -138,7 +138,10 @@ Supply-chain settings (see also [SECURITY.md](./SECURITY.md)):
 
 ## Changes and pull requests
 
-- Branch from `main` and open the PR against `main`. `CODEOWNERS` requests
+- Open the PR against `main`. Branch from `main` once the work on your current
+  branch has merged. If that work has not merged, decide first whether the new
+  work continues from it or starts from `main`; agents ask rather than choose
+  (see [AGENTS.md](./AGENTS.md#starting-a-branch)). `CODEOWNERS` requests
   review from the maintainers.
 - Keep `pnpm psy sync` output committed. CI fails on a sync diff.
 - `CHANGELOG.md` has one `## x.y.z` section per release. Bullets usually
