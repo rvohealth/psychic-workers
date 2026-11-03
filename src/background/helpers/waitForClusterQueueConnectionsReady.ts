@@ -94,6 +94,10 @@ export default async function waitForClusterQueueConnectionsReady(
     }, timeoutMs)
 
     for (const cluster of clusters) {
+      // an already-ended Cluster earlier in the list settled the wait: settle()
+      // ran only the cleanups pushed so far, so attaching more would leak
+      if (settled) break
+
       const onError = (error: Error) => {
         lastError = error
         lastErrors.set(cluster, error)

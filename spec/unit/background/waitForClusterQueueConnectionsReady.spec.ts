@@ -171,6 +171,22 @@ describe('waitForClusterQueueConnectionsReady', () => {
       expect(listenerCounts(cluster)).toEqual(before)
     })
 
+    it('attaches nothing to a later Cluster once an earlier one that already ended has settled the wait', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      const ended = track(lazyCluster('end'))
+      const pending = track(lazyCluster('connecting'))
+      const endedBefore = listenerCounts(ended)
+      const before = listenerCounts(pending)
+
+      await expect(waitForClusterQueueConnectionsReady([ended, pending])).rejects.toThrow(
+        'ended before it was ready',
+      )
+
+      expect(listenerCounts(ended)).toEqual(endedBefore)
+      expect(listenerCounts(pending)).toEqual(before)
+      expect(vi.getTimerCount()).toEqual(0)
+    })
+
     it('rejects when the bound passes, with the most recent emitted error', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       const cluster = track(lazyCluster('connecting'))
