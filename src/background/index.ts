@@ -46,6 +46,12 @@ import {
   WorkstreamBackgroundJobConfig,
 } from '../types/background.js'
 import nameToRedisQueueName from './helpers/nameToRedisQueueName.js'
+import {
+  nativeDefaultQueueConnection,
+  nativeNamedQueueConnection,
+  simpleDefaultQueueConnection,
+  simpleNamedWorkstreamQueueConnection,
+} from './helpers/queueConnectionRules.js'
 
 const DEFAULT_CONCURRENCY = 10
 
@@ -465,7 +471,7 @@ export class Background {
       )
     }
 
-    const defaultQueueConnection = backgroundOptions.defaultQueueConnection
+    const defaultQueueConnection = simpleDefaultQueueConnection(backgroundOptions)
     const defaultWorkerConnection = backgroundOptions.defaultWorkerConnection
 
     if (defaultQueueConnection) this.redisConnections.push(defaultQueueConnection)
@@ -528,7 +534,10 @@ export class Background {
       if (namedWorkstream.queueConnection) this.redisConnections.push(namedWorkstream.queueConnection)
       if (namedWorkstream.workerConnection) this.redisConnections.push(namedWorkstream.workerConnection)
 
-      const namedWorkstreamQueueConnection = namedWorkstream.queueConnection || defaultQueueConnection
+      const namedWorkstreamQueueConnection = simpleNamedWorkstreamQueueConnection(
+        namedWorkstream,
+        defaultQueueConnection,
+      )
       const namedWorkstreamWorkerConnection = namedWorkstream.workerConnection || defaultWorkerConnection
       // transitional queues must have the same names they had prior to making them
       // transitional since the name is what identifies the queues and enables the
@@ -609,8 +618,7 @@ export class Background {
     backgroundOptions: PsychicBackgroundNativeBullMQOptions,
   ) {
     const nativeBullMQ = backgroundOptions.nativeBullMQ
-    const defaultQueueConnection =
-      nativeBullMQ.defaultQueueOptions?.queueConnection || backgroundOptions.defaultQueueConnection
+    const defaultQueueConnection = nativeDefaultQueueConnection(backgroundOptions)
     const defaultWorkerConnection =
       nativeBullMQ.defaultQueueOptions?.workerConnection || backgroundOptions.defaultWorkerConnection
 
@@ -672,7 +680,7 @@ export class Background {
       if (namedQueueOptions.queueConnection) this.redisConnections.push(namedQueueOptions.queueConnection)
       if (namedQueueOptions.workerConnection) this.redisConnections.push(namedQueueOptions.workerConnection)
 
-      const namedQueueConnection = namedQueueOptions.queueConnection || defaultQueueConnection
+      const namedQueueConnection = nativeNamedQueueConnection(namedQueueOptions, defaultQueueConnection)
       const namedWorkerConnection = namedQueueOptions.workerConnection || defaultWorkerConnection
 
       if (!namedQueueConnection)

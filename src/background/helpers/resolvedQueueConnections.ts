@@ -5,18 +5,22 @@ import type {
   TransitionalPsychicBackgroundSimpleOptions,
 } from '../../psychic-app-workers/index.js'
 import type { PsychicBackgroundOptions } from '../../types/background.js'
+import {
+  nativeDefaultQueueConnection,
+  nativeNamedQueueConnection,
+  simpleDefaultQueueConnection,
+  simpleNamedWorkstreamQueueConnection,
+} from './queueConnectionRules.js'
 
 /**
  * @internal
  *
  * The distinct queue connections `Background#connect` would build a `Queue` on
- * for these options, deduped by object identity. It mirrors the resolution in
- * `Background#simpleConnect` and `Background#nativeBullMQConnect` (a workstream
- * or named queue falls back to the default connection; native mode's
- * `defaultQueueOptions.queueConnection` wins over the top-level default; simple
- * mode's `transitionalWorkstreams` bring their own), but reads the options
- * directly because `Background#redisConnections` is only filled by `connect()`.
- * A spec ties this list to the connections `connect()` really builds queues on.
+ * for these options, deduped by object identity. It resolves each connection with
+ * the same `queueConnectionRules` functions `Background#simpleConnect` and
+ * `Background#nativeBullMQConnect` use, and reads the options directly because
+ * `Background#redisConnections` is only filled by `connect()`. Simple mode's
+ * `transitionalWorkstreams` bring their own connections.
  *
  * Worker connections are deliberately not listed. Tolerates `undefined` options
  * (a callback that never called `set('background')`).
@@ -40,11 +44,11 @@ function addSimpleConnections(
   backgroundOptions: PsychicBackgroundSimpleOptions | TransitionalPsychicBackgroundSimpleOptions,
   connections: Set<RedisOrRedisClusterConnection>,
 ) {
-  const defaultQueueConnection = backgroundOptions.defaultQueueConnection
+  const defaultQueueConnection = simpleDefaultQueueConnection(backgroundOptions)
   if (defaultQueueConnection) connections.add(defaultQueueConnection)
 
   for (const namedWorkstream of backgroundOptions.namedWorkstreams || []) {
-    const queueConnection = namedWorkstream.queueConnection || defaultQueueConnection
+    const queueConnection = simpleNamedWorkstreamQueueConnection(namedWorkstream, defaultQueueConnection)
     if (queueConnection) connections.add(queueConnection)
   }
 
@@ -58,12 +62,11 @@ function addNativeConnections(
   connections: Set<RedisOrRedisClusterConnection>,
 ) {
   const nativeBullMQ = backgroundOptions.nativeBullMQ
-  const defaultQueueConnection =
-    nativeBullMQ.defaultQueueOptions?.queueConnection || backgroundOptions.defaultQueueConnection
+  const defaultQueueConnection = nativeDefaultQueueConnection(backgroundOptions)
   if (defaultQueueConnection) connections.add(defaultQueueConnection)
 
   for (const namedQueueOptions of Object.values(nativeBullMQ.namedQueueOptions || {})) {
-    const queueConnection = namedQueueOptions.queueConnection || defaultQueueConnection
+    const queueConnection = nativeNamedQueueConnection(namedQueueOptions, defaultQueueConnection)
     if (queueConnection) connections.add(queueConnection)
   }
 }

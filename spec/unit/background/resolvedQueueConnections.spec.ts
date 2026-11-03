@@ -1,12 +1,9 @@
 import { Redis } from 'ioredis'
 import resolvedQueueConnections from '../../../src/background/helpers/resolvedQueueConnections.js'
-import { Background, PsychicAppWorkers } from '../../../src/package-exports/index.js'
 import { PsychicBackgroundOptions } from '../../../src/types/background.js'
-import { fakeRedisConnection, installBullMQRecorders } from '../../helpers/bullmqRecorders.js'
+import { fakeRedisConnection } from '../../helpers/bullmqRecorders.js'
 
 describe('resolvedQueueConnections', () => {
-  const bullmq = installBullMQRecorders()
-
   let defaultQueue: Redis
   let defaultWorker: Redis
   let namedQueue: Redis
@@ -32,17 +29,8 @@ describe('resolvedQueueConnections', () => {
     expected.forEach((connection, index) => expect(actual[index]).toBe(connection))
   }
 
-  // the list must be exactly the connections `connect()` builds queues on: this
-  // is what ties the helper's mirrored resolution to the real one
-  function expectMatchesConnect(backgroundOptions: PsychicBackgroundOptions, expected: unknown[]) {
-    PsychicAppWorkers.getOrFail().set('background', backgroundOptions)
-    new Background().connect()
-
-    const connectedOn = [...new Set(bullmq.queues.map(queue => queue.queueOptions['connection']))]
-    const listed = resolvedQueueConnections(PsychicAppWorkers.getOrFail().backgroundOptions)
-
-    expectSame(connectedOn, expected)
-    expectSame(listed, expected)
+  function expectListed(backgroundOptions: PsychicBackgroundOptions, expected: unknown[]) {
+    expectSame(resolvedQueueConnections(backgroundOptions), expected)
   }
 
   it('lists nothing when no background options were set', () => {
@@ -51,7 +39,7 @@ describe('resolvedQueueConnections', () => {
 
   context('simple mode', () => {
     it('lists the default connection once, for the default queue and for workstreams that inherit it', () => {
-      expectMatchesConnect(
+      expectListed(
         {
           defaultQueueConnection: defaultQueue,
           defaultWorkerConnection: defaultWorker,
@@ -62,7 +50,7 @@ describe('resolvedQueueConnections', () => {
     })
 
     it('lists a named workstream queueConnection but never a worker connection', () => {
-      expectMatchesConnect(
+      expectListed(
         {
           defaultQueueConnection: defaultQueue,
           defaultWorkerConnection: defaultWorker,
@@ -73,7 +61,7 @@ describe('resolvedQueueConnections', () => {
     })
 
     it('lists transitional default and named queue connections', () => {
-      expectMatchesConnect(
+      expectListed(
         {
           defaultQueueConnection: defaultQueue,
           defaultWorkerConnection: undefined,
@@ -92,7 +80,7 @@ describe('resolvedQueueConnections', () => {
     })
 
     it('lists a connection shared between the current and transitional workstreams once', () => {
-      expectMatchesConnect(
+      expectListed(
         {
           defaultQueueConnection: defaultQueue,
           defaultWorkerConnection: undefined,
@@ -110,7 +98,7 @@ describe('resolvedQueueConnections', () => {
 
   context('native mode', () => {
     it('lists the top-level default connection for the default queue and for inheriting named queues', () => {
-      expectMatchesConnect(
+      expectListed(
         {
           nativeBullMQ: { namedQueueOptions: { inherits: {}, alsoInherits: {} } },
           defaultQueueConnection: defaultQueue,
@@ -121,7 +109,7 @@ describe('resolvedQueueConnections', () => {
     })
 
     it('lists defaultQueueOptions.queueConnection instead of a top-level default it overrides', () => {
-      expectMatchesConnect(
+      expectListed(
         {
           nativeBullMQ: {
             defaultQueueOptions: { queueConnection: namedQueue, workerConnection: namedWorker },
@@ -135,7 +123,7 @@ describe('resolvedQueueConnections', () => {
     })
 
     it('lists named queues own queueConnection but never a worker connection', () => {
-      expectMatchesConnect(
+      expectListed(
         {
           nativeBullMQ: {
             namedQueueOptions: { own: { queueConnection: namedQueue, workerConnection: namedWorker } },
