@@ -4,6 +4,7 @@ import {
   simpleDefaultQueueConnection,
   simpleNamedWorkstreamQueueConnection,
 } from '../../../src/background/helpers/queueConnectionRules.js'
+import type { TransitionalPsychicBackgroundSimpleOptions } from '../../../src/psychic-app-workers/index.js'
 import { fakeRedisConnection } from '../../helpers/bullmqRecorders.js'
 
 describe('queueConnectionRules', () => {
@@ -17,21 +18,19 @@ describe('queueConnectionRules', () => {
     })
 
     it('the default is undefined when defaultQueueConnection is not set', () => {
-      expect(simpleDefaultQueueConnection({})).toBeUndefined()
+      expect(simpleDefaultQueueConnection({} as TransitionalPsychicBackgroundSimpleOptions)).toBeUndefined()
     })
 
     it('a named workstream uses its own queueConnection', () => {
-      expect(simpleNamedWorkstreamQueueConnection({ name: 'w', queueConnection: own }, topLevelDefault)).toBe(
-        own,
-      )
+      expect(simpleNamedWorkstreamQueueConnection({ queueConnection: own }, topLevelDefault)).toBe(own)
     })
 
     it('a named workstream falls back to the default queue connection', () => {
-      expect(simpleNamedWorkstreamQueueConnection({ name: 'w' }, topLevelDefault)).toBe(topLevelDefault)
+      expect(simpleNamedWorkstreamQueueConnection({}, topLevelDefault)).toBe(topLevelDefault)
     })
 
     it('a named workstream is undefined when it has neither its own connection nor a default', () => {
-      expect(simpleNamedWorkstreamQueueConnection({ name: 'w' }, undefined)).toBeUndefined()
+      expect(simpleNamedWorkstreamQueueConnection({}, undefined)).toBeUndefined()
     })
   })
 
