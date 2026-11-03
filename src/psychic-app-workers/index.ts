@@ -2,16 +2,32 @@ import { PsychicApp } from '@rvoh/psychic'
 import { Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
 import { Cluster, Redis } from 'ioredis'
 import background from '../background/index.js'
+import resolvedQueueConnections from '../background/helpers/resolvedQueueConnections.js'
+import waitForClusterQueueConnectionsReady from '../background/helpers/waitForClusterQueueConnectionsReady.js'
 import ASTWorkersSchemaBuilder from '../cli/ASTWorkersSchemaBuilder.js'
 import PsychicTypesDeprecation from '../cli/PsychicTypesDeprecation.js'
 import { PsychicBackgroundOptions } from '../types/background.js'
 import { cachePsychicWorkersApp, getCachedPsychicWorkersAppOrFail } from './cache.js'
 
 export default class PsychicAppWorkers {
+  /**
+   * Runs the callback that configures the workers plugin, then waits for every
+   * ioredis `Cluster` queue connection it configured to be `'ready'` before
+   * resolving, so app code is never handed a producer ioredis would reject.
+   *
+   * A Cluster that cannot become ready rejects `init` (with ioredis's last
+   * error, or a timeout) and is disconnected, so any process that inits the
+   * workers plugin, including dream CLI commands such as `db:migrate`, needs a
+   * reachable Redis Cluster to finish booting. Standalone `Redis` connections and
+   * `lazyConnect` Clusters still at `'wait'` are not waited on, and init never
+   * connects them.
+   */
   public static async init(psychicApp: PsychicApp, cb: (app: PsychicAppWorkers) => void | Promise<void>) {
     const psychicWorkersApp = new PsychicAppWorkers(psychicApp)
 
     await cb(psychicWorkersApp)
+
+    await waitForClusterQueueConnectionsReady(resolvedQueueConnections(psychicWorkersApp.backgroundOptions))
 
     psychicApp.on('cli:sync', async () => {
       await new ASTWorkersSchemaBuilder().build()
