@@ -1,9 +1,11 @@
 import { Redis } from 'ioredis'
-import resolvedQueueConnections from '../../../src/background/helpers/resolvedQueueConnections.js'
+import backgroundQueues, {
+  distinctQueueConnections,
+} from '../../../src/background/helpers/backgroundQueues.js'
 import { PsychicBackgroundOptions } from '../../../src/types/background.js'
 import { fakeRedisConnection } from '../../helpers/bullmqRecorders.js'
 
-describe('resolvedQueueConnections', () => {
+describe('distinctQueueConnections', () => {
   let defaultQueue: Redis
   let defaultWorker: Redis
   let namedQueue: Redis
@@ -30,11 +32,11 @@ describe('resolvedQueueConnections', () => {
   }
 
   function expectListed(backgroundOptions: PsychicBackgroundOptions, expected: unknown[]) {
-    expectSame(resolvedQueueConnections(backgroundOptions), expected)
+    expectSame(distinctQueueConnections(backgroundOptions), expected)
   }
 
   it('lists nothing when no background options were set', () => {
-    expect(resolvedQueueConnections(undefined)).toEqual([])
+    expect(distinctQueueConnections(undefined)).toEqual([])
   })
 
   context('simple mode', () => {
@@ -134,5 +136,90 @@ describe('resolvedQueueConnections', () => {
         [defaultQueue, namedQueue],
       )
     })
+  })
+})
+
+describe('backgroundQueues', () => {
+  const topLevelQueue = fakeRedisConnection('topLevelQueue')
+  const topLevelWorker = fakeRedisConnection('topLevelWorker')
+  const nativeQueue = fakeRedisConnection('nativeQueue')
+  const nativeWorker = fakeRedisConnection('nativeWorker')
+  const ownQueue = fakeRedisConnection('ownQueue')
+  const ownWorker = fakeRedisConnection('ownWorker')
+
+  const label = (connection: unknown) => (connection as { __label?: string } | undefined)?.__label
+
+  // [name, transitional, queue connection, worker connection, connections to close]
+  const summary = (backgroundOptions: PsychicBackgroundOptions | undefined) =>
+    backgroundQueues(backgroundOptions).map(queue => [
+      queue.name,
+      queue.transitional,
+      label(queue.queueConnection),
+      label(queue.workerConnection),
+      queue.ownConnections.map(label),
+    ])
+
+  it('lists nothing when no background options were set', () => {
+    expect(backgroundQueues(undefined)).toEqual([])
+  })
+
+  it('simple mode: a named workstream falls back to the defaults, and transitional queues come last', () => {
+    expect(
+      summary({
+        defaultQueueConnection: topLevelQueue,
+        defaultWorkerConnection: topLevelWorker,
+        namedWorkstreams: [
+          { name: 'inherits' },
+          { name: 'own', queueConnection: ownQueue, workerConnection: ownWorker },
+        ],
+        transitionalWorkstreams: {
+          defaultQueueConnection: nativeQueue,
+          defaultWorkerConnection: undefined,
+          namedWorkstreams: [{ name: 'inherits' }],
+        },
+      }),
+    ).toEqual([
+      [undefined, false, 'topLevelQueue', 'topLevelWorker', ['topLevelQueue', 'topLevelWorker']],
+      ['inherits', false, 'topLevelQueue', 'topLevelWorker', []],
+      ['own', false, 'ownQueue', 'ownWorker', ['ownQueue', 'ownWorker']],
+      [undefined, true, 'nativeQueue', undefined, ['nativeQueue']],
+      ['inherits', true, 'nativeQueue', undefined, []],
+    ])
+  })
+
+  it('native mode: defaultQueueOptions beat the top-level defaults, and named queues fall back to them', () => {
+    expect(
+      summary({
+        nativeBullMQ: {
+          defaultQueueOptions: { queueConnection: nativeQueue, workerConnection: nativeWorker },
+          namedQueueOptions: {
+            inherits: {},
+            own: { queueConnection: ownQueue, workerConnection: ownWorker },
+          },
+        },
+        defaultQueueConnection: topLevelQueue,
+        defaultWorkerConnection: topLevelWorker,
+      }),
+    ).toEqual([
+      [undefined, false, 'nativeQueue', 'nativeWorker', ['nativeQueue', 'nativeWorker']],
+      ['inherits', false, 'nativeQueue', 'nativeWorker', []],
+      ['own', false, 'ownQueue', 'ownWorker', ['ownQueue', 'ownWorker']],
+    ])
+  })
+
+  it('native mode: the default falls back to the top-level defaults, and a missing connection stays undefined', () => {
+    expect(
+      summary({
+        nativeBullMQ: {},
+        defaultQueueConnection: topLevelQueue,
+        defaultWorkerConnection: undefined,
+      }),
+    ).toEqual([[undefined, false, 'topLevelQueue', undefined, ['topLevelQueue']]])
+    expect(
+      summary({ nativeBullMQ: { namedQueueOptions: { orphan: {} } }, defaultWorkerConnection: undefined }),
+    ).toEqual([
+      [undefined, false, undefined, undefined, []],
+      ['orphan', false, undefined, undefined, []],
+    ])
   })
 })

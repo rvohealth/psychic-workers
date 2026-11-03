@@ -29,9 +29,7 @@ import PsychicAppWorkers, {
   PsychicBackgroundNativeBullMQOptions,
   PsychicBackgroundSimpleOptions,
   PsychicBackgroundWorkstreamOptions,
-  QueueOptionsWithConnectionInstance,
   RedisOrRedisClusterConnection,
-  TransitionalPsychicBackgroundSimpleOptions,
 } from '../psychic-app-workers/index.js'
 
 import AttemtedToBackgroundEntireDreamModel from '../error/background/AttemtedToBackgroundEntireDreamModel.js'
@@ -45,13 +43,8 @@ import {
   WorkerQueueDescription,
   WorkstreamBackgroundJobConfig,
 } from '../types/background.js'
+import backgroundQueues from './helpers/backgroundQueues.js'
 import nameToRedisQueueName from './helpers/nameToRedisQueueName.js'
-import {
-  nativeDefaultQueueConnection,
-  nativeNamedQueueConnection,
-  simpleDefaultQueueConnection,
-  simpleNamedWorkstreamQueueConnection,
-} from './helpers/queueConnectionRules.js'
 
 const DEFAULT_CONCURRENCY = 10
 
@@ -453,158 +446,69 @@ export class Background {
    */
   private simpleConnect(
     defaultBullMQQueueOptions: Omit<QueueOptions, 'connection'>,
-    backgroundOptions: PsychicBackgroundSimpleOptions | TransitionalPsychicBackgroundSimpleOptions,
-
-    {
-      activatingTransitionalWorkstreams = false,
-    }: {
-      activatingTransitionalWorkstreams?: boolean
-    } = {},
+    backgroundOptions: PsychicBackgroundSimpleOptions,
   ) {
     // refused before any queue or worker of this connect exists, for the current and the
-    // transitional workstreams alike (the transitional re-entry below has already been checked)
-    if (!activatingTransitionalWorkstreams) {
-      this.assertNamedWorkstreamRateLimits(backgroundOptions.namedWorkstreams, false)
-      this.assertNamedWorkstreamRateLimits(
-        (backgroundOptions as PsychicBackgroundSimpleOptions).transitionalWorkstreams?.namedWorkstreams,
-        true,
-      )
-    }
+    // transitional workstreams alike
+    this.assertNamedWorkstreamRateLimits(backgroundOptions.namedWorkstreams, false)
+    this.assertNamedWorkstreamRateLimits(backgroundOptions.transitionalWorkstreams?.namedWorkstreams, true)
 
-    const defaultQueueConnection = simpleDefaultQueueConnection(backgroundOptions)
-    const defaultWorkerConnection = backgroundOptions.defaultWorkerConnection
+    for (const { name, transitional, level, own: namedWorkstream, ...connections } of backgroundQueues(
+      backgroundOptions,
+    )) {
+      this.redisConnections.push(...connections.ownConnections)
 
-    if (defaultQueueConnection) this.redisConnections.push(defaultQueueConnection)
-    if (defaultWorkerConnection) this.redisConnections.push(defaultWorkerConnection)
-
-    // transitional queues must have the same names they had prior to making them
-    // transitional since the name is what identifies the queues and enables the
-    // queues to be worked off
-    const formattedQueueName = nameToRedisQueueName(Background.defaultQueueName, defaultQueueConnection)
-
-    ///////////////////////////////
-    // create default workstream //
-    ///////////////////////////////
-
-    const defaultQueue = new Background.Queue(formattedQueueName, {
-      ...defaultBullMQQueueOptions,
-      connection: defaultQueueConnection,
-    })
-
-    if (activatingTransitionalWorkstreams) {
-      this.defaultTransitionalQueue = defaultQueue
-    } else {
-      this.defaultQueue = defaultQueue
-    }
-    ////////////////////////////////////
-    // end: create default workstream //
-    ////////////////////////////////////
-
-    /////////////////////////////
-    // create default workers //
-    /////////////////////////////
-    const defaultWorkerOptions = {
-      autorun: !EnvInternal.isTest,
-      ...backgroundOptions.defaultBullMQWorkerOptions,
-      concurrency: backgroundOptions.defaultWorkstream?.concurrency || DEFAULT_CONCURRENCY,
-    }
-
-    this.recordQueueWorkers(
-      defaultQueue,
-      defaultWorkerOptions,
-      defaultWorkerConnection,
-      backgroundOptions.defaultWorkstream?.workerCount ?? 1,
-      {
-        mode: 'simple',
-        isDefaultQueue: true,
-        configuredName: Background.defaultQueueName,
-        transitional: activatingTransitionalWorkstreams,
-      },
-    )
-    /////////////////////////////////
-    // end: create default workers //
-    /////////////////////////////////
-
-    //////////////////////////////
-    // create named workstreams //
-    //////////////////////////////
-    const namedWorkstreams: PsychicBackgroundWorkstreamOptions[] = backgroundOptions.namedWorkstreams || []
-
-    namedWorkstreams.forEach(namedWorkstream => {
-      if (namedWorkstream.queueConnection) this.redisConnections.push(namedWorkstream.queueConnection)
-      if (namedWorkstream.workerConnection) this.redisConnections.push(namedWorkstream.workerConnection)
-
-      const namedWorkstreamQueueConnection = simpleNamedWorkstreamQueueConnection(
-        namedWorkstream,
-        defaultQueueConnection,
-      )
-      const namedWorkstreamWorkerConnection = namedWorkstream.workerConnection || defaultWorkerConnection
       // transitional queues must have the same names they had prior to making them
       // transitional since the name is what identifies the queues and enables the
       // queues to be worked off
-      const namedWorkstreamFormattedQueueName = nameToRedisQueueName(
-        namedWorkstream.name,
-        namedWorkstreamQueueConnection,
+      const queue = new Background.Queue(
+        nameToRedisQueueName(name ?? Background.defaultQueueName, connections.queueConnection),
+        { ...defaultBullMQQueueOptions, connection: connections.queueConnection },
       )
 
-      const namedQueue = new Background.Queue(namedWorkstreamFormattedQueueName, {
-        ...defaultBullMQQueueOptions,
-        connection: namedWorkstreamQueueConnection,
-      })
-
-      if (activatingTransitionalWorkstreams) {
-        this.namedTransitionalQueues[namedWorkstream.name] = namedQueue
+      if (name === undefined) {
+        if (transitional) this.defaultTransitionalQueue = queue
+        else this.defaultQueue = queue
+      } else if (transitional) {
+        this.namedTransitionalQueues[name] = queue
       } else {
-        this.namedQueues[namedWorkstream.name] = namedQueue
-        this.workstreamNames.push(namedWorkstream.name)
+        this.namedQueues[name] = queue
+        this.workstreamNames.push(name)
       }
 
-      //////////////////////////
-      // create named workers //
-      //////////////////////////
-      const namedWorkerOptions = {
+      const workstream = namedWorkstream ?? level.defaultWorkstream
+      const workerOptions = {
         autorun: !EnvInternal.isTest,
-        ...backgroundOptions.defaultBullMQWorkerOptions,
-        // open-source BullMQ rate limiting (queue-wide, shared by every worker on this queue);
-        // conditional spread so the key is absent when no rateLimit is configured
-        ...(namedWorkstream.rateLimit ? { limiter: namedWorkstream.rateLimit } : {}),
-        // BullMQ Pro option (ignored by open-source BullMQ); Psychic can't be aware of BullMQ Pro options
-        group: {
-          // Pro's worker `group` option is `{ limit, concurrency }` with no `id` (grouping
-          // happens at job add, see `_addToQueue`); not verified against an installed Pro build
-          id: namedWorkstream.name,
-          limit: namedWorkstream.rateLimit,
-        },
-        concurrency: namedWorkstream.concurrency || DEFAULT_CONCURRENCY,
+        ...level.defaultBullMQWorkerOptions,
+        ...(namedWorkstream
+          ? {
+              // open-source BullMQ rate limiting (queue-wide, shared by every worker on this queue);
+              // conditional spread so the key is absent when no rateLimit is configured
+              ...(namedWorkstream.rateLimit ? { limiter: namedWorkstream.rateLimit } : {}),
+              // BullMQ Pro option (ignored by open-source BullMQ); Psychic can't be aware of BullMQ Pro options
+              group: {
+                // Pro's worker `group` option is `{ limit, concurrency }` with no `id` (grouping
+                // happens at job add, see `_addToQueue`); not verified against an installed Pro build
+                id: namedWorkstream.name,
+                limit: namedWorkstream.rateLimit,
+              },
+            }
+          : {}),
+        concurrency: workstream?.concurrency || DEFAULT_CONCURRENCY,
       }
 
       this.recordQueueWorkers(
-        namedQueue,
-        namedWorkerOptions,
-        namedWorkstreamWorkerConnection,
-        namedWorkstream.workerCount ?? 1,
+        queue,
+        workerOptions,
+        connections.workerConnection,
+        workstream?.workerCount ?? 1,
         {
           mode: 'simple',
-          isDefaultQueue: false,
-          configuredName: namedWorkstream.name,
-          transitional: activatingTransitionalWorkstreams,
+          isDefaultQueue: name === undefined,
+          configuredName: name ?? Background.defaultQueueName,
+          transitional,
         },
       )
-      ///////////////////////////////
-      // end: create named workers //
-      ///////////////////////////////
-    })
-    ///////////////////////////////////
-    // end: create named workstreams //
-    ///////////////////////////////////
-
-    const transitionalWorkstreams = (backgroundOptions as PsychicBackgroundSimpleOptions)
-      .transitionalWorkstreams
-
-    if (transitionalWorkstreams) {
-      this.simpleConnect(defaultBullMQQueueOptions, transitionalWorkstreams, {
-        activatingTransitionalWorkstreams: true,
-      })
     }
   }
 
@@ -618,113 +522,51 @@ export class Background {
     backgroundOptions: PsychicBackgroundNativeBullMQOptions,
   ) {
     const nativeBullMQ = backgroundOptions.nativeBullMQ
-    const defaultQueueConnection = nativeDefaultQueueConnection(backgroundOptions)
-    const defaultWorkerConnection =
-      nativeBullMQ.defaultQueueOptions?.workerConnection || backgroundOptions.defaultWorkerConnection
 
-    if (defaultQueueConnection) this.redisConnections.push(defaultQueueConnection)
-    if (defaultWorkerConnection) this.redisConnections.push(defaultWorkerConnection)
+    for (const { name, own: queueOptions, ...connections } of backgroundQueues(backgroundOptions)) {
+      this.redisConnections.push(...connections.ownConnections)
 
-    if (!defaultQueueConnection)
-      throw new DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection()
-
-    const formattedQueueName = nameToRedisQueueName(Background.defaultQueueName, defaultQueueConnection)
-
-    //////////////////////////
-    // create default queue //
-    //////////////////////////
-    const defaultQueue = new Background.Queue(formattedQueueName, {
-      ...defaultBullMQQueueOptions,
-      ...nativeBullMQ.defaultQueueOptions,
-      connection: defaultQueueConnection,
-    })
-    this.defaultQueue = defaultQueue
-    ///////////////////////////////
-    // end: create default queue //
-    ///////////////////////////////
-
-    /////////////////////////////
-    // create default workers //
-    /////////////////////////////
-    const defaultWorkerOptions = {
-      autorun: !EnvInternal.isTest,
-      ...backgroundOptions.defaultBullMQWorkerOptions,
-      ...backgroundOptions.nativeBullMQ.defaultWorkerOptions,
-    }
-
-    this.recordQueueWorkers(
-      defaultQueue,
-      defaultWorkerOptions,
-      defaultWorkerConnection,
-      nativeBullMQ.defaultWorkerCount ?? 1,
-      {
-        mode: 'native',
-        isDefaultQueue: true,
-        configuredName: Background.defaultQueueName,
-        transitional: false,
-      },
-    )
-    /////////////////////////////////
-    // end: create default workers //
-    /////////////////////////////////
-
-    /////////////////////////
-    // create named queues //
-    /////////////////////////
-    const namedQueueOptionsMap: Record<string, QueueOptionsWithConnectionInstance> =
-      nativeBullMQ.namedQueueOptions || {}
-
-    Object.keys(namedQueueOptionsMap).forEach(queueName => {
-      const namedQueueOptions: QueueOptionsWithConnectionInstance = namedQueueOptionsMap[queueName]!
-
-      if (namedQueueOptions.queueConnection) this.redisConnections.push(namedQueueOptions.queueConnection)
-      if (namedQueueOptions.workerConnection) this.redisConnections.push(namedQueueOptions.workerConnection)
-
-      const namedQueueConnection = nativeNamedQueueConnection(namedQueueOptions, defaultQueueConnection)
-      const namedWorkerConnection = namedQueueOptions.workerConnection || defaultWorkerConnection
-
-      if (!namedQueueConnection)
-        throw new NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection(queueName)
-
-      const formattedQueuename = nameToRedisQueueName(queueName, namedQueueConnection)
-
-      const namedQueue = new Background.Queue(formattedQueuename, {
-        ...defaultBullMQQueueOptions,
-        ...namedQueueOptions,
-        connection: namedQueueConnection,
-      })
-      this.namedQueues[queueName] = namedQueue
-
-      //////////////////////////
-      // create extra workers //
-      //////////////////////////
-      const extraWorkerOptionsMap: Record<string, BullMQNativeWorkerOptions> =
-        nativeBullMQ.namedQueueWorkers || {}
-      const extraWorkerOptions: BullMQNativeWorkerOptions | undefined = extraWorkerOptionsMap[queueName]
-      const extraWorkerCount = extraWorkerOptions ? (extraWorkerOptions.workerCount ?? 1) : 0
-
-      this.groupNames[queueName] ||= []
-      if (extraWorkerOptions?.group?.id) this.groupNames[queueName].push(extraWorkerOptions.group.id)
-
-      const namedWorkerOptions = {
-        autorun: !EnvInternal.isTest,
-        ...backgroundOptions.defaultBullMQWorkerOptions,
-        ...extraWorkerOptions,
+      if (!connections.queueConnection) {
+        if (name === undefined)
+          throw new DefaultBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection()
+        throw new NamedBullMQNativeOptionsMissingQueueConnectionAndDefaultQueueConnection(name)
       }
 
-      this.recordQueueWorkers(namedQueue, namedWorkerOptions, namedWorkerConnection, extraWorkerCount, {
+      const queue = new Background.Queue(
+        nameToRedisQueueName(name ?? Background.defaultQueueName, connections.queueConnection),
+        { ...defaultBullMQQueueOptions, ...queueOptions, connection: connections.queueConnection },
+      )
+
+      let workerOptions: Omit<WorkerOptions, 'connection'> = {
+        autorun: !EnvInternal.isTest,
+        ...backgroundOptions.defaultBullMQWorkerOptions,
+      }
+      let workerCount: number
+
+      if (name === undefined) {
+        this.defaultQueue = queue
+        workerOptions = { ...workerOptions, ...nativeBullMQ.defaultWorkerOptions }
+        workerCount = nativeBullMQ.defaultWorkerCount ?? 1
+      } else {
+        this.namedQueues[name] = queue
+
+        // extra workers
+        const extraWorkerOptions: BullMQNativeWorkerOptions | undefined =
+          nativeBullMQ.namedQueueWorkers?.[name]
+        workerOptions = { ...workerOptions, ...extraWorkerOptions }
+        workerCount = extraWorkerOptions ? (extraWorkerOptions.workerCount ?? 1) : 0
+
+        this.groupNames[name] ||= []
+        if (extraWorkerOptions?.group?.id) this.groupNames[name].push(extraWorkerOptions.group.id)
+      }
+
+      this.recordQueueWorkers(queue, workerOptions, connections.workerConnection, workerCount, {
         mode: 'native',
-        isDefaultQueue: false,
-        configuredName: queueName,
+        isDefaultQueue: name === undefined,
+        configuredName: name ?? Background.defaultQueueName,
         transitional: false,
       })
-      ///////////////////////////////
-      // end: create extra workers //
-      ///////////////////////////////
-    })
-    //////////////////////////////
-    // end: create named queues //
-    //////////////////////////////
+    }
   }
 
   /**

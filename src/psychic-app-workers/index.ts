@@ -2,7 +2,7 @@ import { PsychicApp } from '@rvoh/psychic'
 import { Queue, QueueOptions, Worker, WorkerOptions } from 'bullmq'
 import { Cluster, Redis } from 'ioredis'
 import background from '../background/index.js'
-import resolvedQueueConnections from '../background/helpers/resolvedQueueConnections.js'
+import { distinctQueueConnections } from '../background/helpers/backgroundQueues.js'
 import waitForClusterQueueConnectionsReady from '../background/helpers/waitForClusterQueueConnectionsReady.js'
 import ASTWorkersSchemaBuilder from '../cli/ASTWorkersSchemaBuilder.js'
 import PsychicTypesDeprecation from '../cli/PsychicTypesDeprecation.js'
@@ -27,7 +27,7 @@ export default class PsychicAppWorkers {
 
     await cb(psychicWorkersApp)
 
-    await waitForClusterQueueConnectionsReady(resolvedQueueConnections(psychicWorkersApp.backgroundOptions))
+    await waitForClusterQueueConnectionsReady(distinctQueueConnections(psychicWorkersApp.backgroundOptions))
 
     psychicApp.on('cli:sync', async () => {
       await new ASTWorkersSchemaBuilder().build()
