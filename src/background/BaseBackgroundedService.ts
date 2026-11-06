@@ -25,12 +25,13 @@ export default class BaseBackgroundedService {
   /**
    * @internal
    *
-   * Returns a unique global name for the given service.
+   * Returns a unique global name registered on this service constructor.
+   * Each subclass must be registered separately, even when it inherits methods.
    *
    * @returns A string representing a unique key for this service
    */
   public static get globalName(): string {
-    if (!this._globalName) throw new GlobalNameNotSet(this)
+    if (!Object.hasOwn(this, '_globalName') || !this._globalName) throw new GlobalNameNotSet(this)
     return this._globalName
   }
 
