@@ -75,9 +75,12 @@ jobs:
       - run: corepack enable
 
       - run: pnpm install --frozen-lockfile
+      # Exact versions: bullmq 5 pins its own ioredis exactly (5.81.5 pins
+      # 5.11.1), so floating either one can install a second ioredis copy and
+      # break the type-check with no repository change. Bump both together.
       - name: Install BullMQ 5 and ioredis 5
         if: matrix.bullmq5
-        run: pnpm add --save-dev bullmq@^5.81.5 ioredis@^5.11.1
+        run: pnpm add --save-dev bullmq@5.81.5 ioredis@5.11.1
       - name: Type-check src, test-app and spec against BullMQ 5 and ioredis 5
         if: matrix.bullmq5
         run: pnpm build:test-app
