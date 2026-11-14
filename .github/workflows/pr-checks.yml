@@ -20,13 +20,17 @@ permissions:
 
 jobs:
   uspec:
-    name: Unit tests (Node ${{ matrix.node-version }})
+    name: Unit tests (Node ${{ matrix.node-version }}${{ matrix.bullmq5 && ', BullMQ 5 + ioredis 5' || '' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         # 26 is the primary target; 24 is the oldest supported runtime
         node-version: ["26", "24"]
+        # the peer ranges accept BullMQ 5 or 6 and ioredis 5 or 6. BullMQ 6 +
+        # ioredis 6 is the locked devDependency graph; the bullmq5 runs install
+        # BullMQ 5 + ioredis 5 over it.
+        bullmq5: [false, true]
     services:
       postgres:
         image: postgres:13
@@ -71,6 +75,12 @@ jobs:
       - run: corepack enable
 
       - run: pnpm install --frozen-lockfile
+      - name: Install BullMQ 5 and ioredis 5
+        if: matrix.bullmq5
+        run: pnpm add --save-dev bullmq@^5.81.5 ioredis@^5.11.1
+      - name: Type-check src, test-app and spec against BullMQ 5 and ioredis 5
+        if: matrix.bullmq5
+        run: pnpm build:test-app
       - run: pnpm psy db:migrate --skip-sync
       - run: pnpm uspec
 
