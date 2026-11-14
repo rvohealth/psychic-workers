@@ -3,6 +3,7 @@ import { Job } from 'bullmq'
 import BaseBackgroundedService from '../../../src/background/BaseBackgroundedService.js'
 import BaseScheduledService from '../../../src/background/BaseScheduledService.js'
 import background from '../../../src/background/index.js'
+import ServiceGlobalNameNotSet from '../../../src/error/background/ServiceGlobalNameNotSet.js'
 import PsychicAppWorkers, {
   PsychicWorkersAppTestInvocationType,
 } from '../../../src/psychic-app-workers/index.js'
@@ -96,6 +97,69 @@ describe('service registration', () => {
         Parent.setGlobalName('services/Parent')
         expect(() => Child.globalName).toThrow(GlobalNameNotSet)
         expect(() => Grandchild.globalName).toThrow(GlobalNameNotSet)
+      })
+
+      describe('the error message', () => {
+        function messageFor(klass: { readonly globalName: string }) {
+          try {
+            void klass.globalName
+          } catch (error) {
+            expect(error).toBeInstanceOf(ServiceGlobalNameNotSet)
+            return (error as Error).message
+          }
+          throw new Error('expected globalName to throw')
+        }
+
+        it('prescribes nesting an unregistered child inside its registered parent’s namespace', () => {
+          class ApplicationService extends Base {}
+          class ReminderService extends ApplicationService {}
+          class BookingReminderService extends ReminderService {}
+          ReminderService.setGlobalName('services/Billing/ReminderService')
+
+          const message = messageFor(BookingReminderService)
+          expect(message).toContain(
+            'BookingReminderService extends ReminderService but has no global name of its own',
+          )
+          expect(message).toContain('the worker would run ReminderService instead')
+          expect(message).toContain('default export of its own')
+          expect(message).toContain('make the file hierarchy match the inheritance chain')
+          expect(message).toContain(
+            '  src/app/services/Billing/ReminderService.ts\n' +
+              '    export default class ReminderService extends ApplicationService\n' +
+              '  src/app/services/Billing/ReminderService/BookingReminderService.ts\n' +
+              '    export default class BookingReminderService extends ReminderService',
+          )
+        })
+
+        it('lays out every unregistered level down to a grandchild, naming the registered ancestor it would run as', () => {
+          class ApplicationService extends Base {}
+          class ReminderService extends ApplicationService {}
+          class BookingReminderService extends ReminderService {}
+          class UrgentBookingReminderService extends BookingReminderService {}
+          ReminderService.setGlobalName('services/ReminderService')
+
+          const message = messageFor(UrgentBookingReminderService)
+          expect(message).toContain('the worker would run ReminderService instead')
+          expect(message).toContain(
+            '  src/app/services/ReminderService/BookingReminderService.ts\n' +
+              '    export default class BookingReminderService extends ReminderService\n' +
+              '  src/app/services/ReminderService/BookingReminderService/UrgentBookingReminderService.ts\n' +
+              '    export default class UrgentBookingReminderService extends BookingReminderService',
+          )
+        })
+
+        it('places a direct child of an application base at the top of the services directory', () => {
+          class ApplicationService extends Base {}
+          class BookingReminderService extends ApplicationService {}
+
+          const message = messageFor(BookingReminderService)
+          expect(message).toContain('BookingReminderService has no global name')
+          expect(message).not.toContain('would run')
+          expect(message).toContain(
+            '  src/app/services/BookingReminderService.ts\n' +
+              '    export default class BookingReminderService extends ApplicationService',
+          )
+        })
       })
 
       it('keeps parent and child registrations independent when either is registered again', () => {

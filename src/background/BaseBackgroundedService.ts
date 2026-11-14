@@ -1,8 +1,8 @@
-import { GlobalNameNotSet } from '@rvoh/dream/errors'
 import { Job } from 'bullmq'
 import durationToSeconds from '../helpers/durationToSeconds.js'
 import { BackgroundJobConfig, BackgroundWithOpts, DelayedJobOpts } from '../types/background.js'
 import { FunctionPropertyNames } from '../types/utils.js'
+import ServiceGlobalNameNotSet from '../error/background/ServiceGlobalNameNotSet.js'
 import background from './index.js'
 
 export default class BaseBackgroundedService {
@@ -26,12 +26,16 @@ export default class BaseBackgroundedService {
    * @internal
    *
    * Returns a unique global name registered on this service constructor.
-   * Each subclass must be registered separately, even when it inherits methods.
+   * Each subclass must be registered separately, even when it inherits methods:
+   * Psychic registers the default export of each file in the services
+   * directory, and a service that extends another service lives in its
+   * parent's namespace (src/app/services/Parent.ts, src/app/services/Parent/Child.ts).
    *
    * @returns A string representing a unique key for this service
    */
   public static get globalName(): string {
-    if (!Object.hasOwn(this, '_globalName') || !this._globalName) throw new GlobalNameNotSet(this)
+    if (!Object.hasOwn(this, '_globalName') || !this._globalName)
+      throw new ServiceGlobalNameNotSet(this, BaseBackgroundedService)
     return this._globalName
   }
 
