@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { Job, Worker, WorkerOptions } from 'bullmq'
+import { Job, Worker } from 'bullmq'
+import { Redis } from 'ioredis'
 import background from '../../../../src/background/index.js'
 import PsychicAppWorkers, {
   PsychicWorkersAppTestInvocationType,
@@ -60,11 +61,14 @@ describe('.clean', () => {
       const queue = background.queues.find(
         queue => queue.name === WorkerTestUtils.parallelTestSafeQueueName('snazzy'),
       )!
+      const queueConnection = queue.opts.connection
+      assert(queueConnection instanceof Redis)
+      const workerConnection = queueConnection.duplicate({ maxRetriesPerRequest: null })
       const worker = new Worker(queue.name, async () => {}, {
         autorun: false,
-        connection: queue.client,
+        connection: workerConnection,
         concurrency: 1,
-      } as WorkerOptions)
+      })
 
       try {
         const job = await worker.getNextJob('clean-spec-lock-token')
@@ -77,14 +81,14 @@ describe('.clean', () => {
 
         // the process holding the lock is gone; the lock is all that was
         // keeping the job out of reach
-        const client = await queue.client
-        await client.del(`${queue.toKey(job.id!)}:lock`)
+        await queueConnection.del(`${queue.toKey(job.id!)}:lock`)
 
         await WorkerTestUtils.clean()
         expect(await Job.fromId(queue, job.id!)).toBeUndefined()
         expect(await queue.getActiveCount()).toEqual(0)
       } finally {
         await worker.close()
+        await workerConnection.quit()
       }
     })
   })

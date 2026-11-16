@@ -316,7 +316,9 @@ export class Background {
    * attaches failure listeners by looping over it before `work()` runs attaches
    * nothing and logs nothing to say so.
    */
-  public get workers() {
+  public get workers(): Worker[] {
+    // the explicit `Worker[]` keeps the emitted declaration free of BullMQ 6's
+    // extra type parameters, which BullMQ 5 consumers' `Worker` does not take
     return [...this._workers]
   }
 

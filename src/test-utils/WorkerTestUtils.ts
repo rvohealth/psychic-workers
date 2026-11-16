@@ -1,4 +1,5 @@
-import { Job, Queue, WorkerOptions } from 'bullmq'
+import { Job, Queue } from 'bullmq'
+import { Cluster } from 'ioredis'
 import nameToRedisQueueName from '../background/helpers/nameToRedisQueueName.js'
 import parallelTestSafeQueueName from '../background/helpers/parallelTestSafeQueueName.js'
 import background, { Background } from '../background/index.js'
@@ -22,6 +23,25 @@ export function queueNamesMatch(queue: Queue, compareQueueName: string): boolean
 }
 
 const LOCK_TOKEN = 'psychic-test-worker'
+
+/**
+ * a new connection to the same Redis the queue was built with (see
+ * `queueNamesMatch` for why the cast is safe), carrying the
+ * `maxRetriesPerRequest: null` BullMQ requires of a worker connection. The
+ * caller owns it and must close it.
+ */
+function workerConnectionFor(queue: Queue): RedisOrRedisClusterConnection {
+  const queueConnection = queue.opts.connection as RedisOrRedisClusterConnection
+  if (queueConnection instanceof Cluster) {
+    // typed through `duplicate`'s own parameter so it compiles against both
+    // ioredis 5 and ioredis 6 under `exactOptionalPropertyTypes`
+    const overrides = {
+      redisOptions: { ...queueConnection.options.redisOptions, maxRetriesPerRequest: null },
+    } as NonNullable<Parameters<Cluster['duplicate']>[1]>
+    return queueConnection.duplicate(undefined, overrides)
+  }
+  return queueConnection.duplicate({ maxRetriesPerRequest: null })
+}
 
 export default class WorkerTestUtils {
   /*
@@ -154,20 +174,29 @@ export default class WorkerTestUtils {
     }
   }
 
+  /**
+   * fetches and runs one job from the queue with a throwaway worker on its own
+   * duplicate of the queue's connection, so it reads the queue's configured
+   * Redis, and closes both before returning.
+   */
   private static async workOne(queue: Queue): Promise<boolean> {
+    const connection = workerConnectionFor(queue)
     const worker = new Background.Worker(queue.name, async job => await background.doWork(job), {
       autorun: false,
-      connection: queue.client,
+      connection,
       concurrency: 1,
-    } as WorkerOptions)
+    })
 
-    if (!worker) throw new Error(`Failed to find worker for queue: ${queue.name}`)
+    try {
+      const job = await worker.getNextJob(LOCK_TOKEN)
+      if (!job) return false
 
-    const job = await worker.getNextJob(LOCK_TOKEN)
-    if (!job) return false
-
-    await this.processJob(job, queue)
-    return true
+      await this.processJob(job, queue)
+      return true
+    } finally {
+      await worker.close()
+      await connection.quit()
+    }
   }
 
   /**

@@ -84,7 +84,16 @@ The **PR Checks** workflow (`.github/workflows/pr-checks.yml`) runs on every
 pull request:
 
 - **Unit tests** on Node 26 and 24: `pnpm install --frozen-lockfile`,
-  `pnpm psy db:migrate --skip-sync`, `pnpm uspec`.
+  `pnpm psy db:migrate --skip-sync`, `pnpm uspec`. This runs on the locked
+  development graph, BullMQ 6 + ioredis 6.
+- **Unit tests, BullMQ 5 + ioredis 5** on Node 26 and 24: the same, after
+  `pnpm add --save-dev bullmq@5.81.5 ioredis@5.11.1` over the locked graph
+  (nothing is committed), with `pnpm build:test-app` to type-check against
+  them. The peer ranges accept both majors, so both are tested. Both versions
+  are exact because BullMQ 5 pins its own ioredis exactly (5.81.5 pins 5.11.1):
+  a floating range can install a second ioredis copy, which fails the
+  type-check. To move the tested BullMQ 5 pairing, bump both together, using
+  the ioredis version the new `bullmq` pins.
 - **Linting** on Node 26: `pnpm lint`.
 - **Check build** on Node 26 and 24: `pnpm build`, then it imports and
   requires every entry point (`@rvoh/psychic-workers`, `/errors`, `/types`,

@@ -67,7 +67,9 @@ describe('the time zone of a scheduled service', () => {
     )
     const jobs = await queue.getDelayed()
     expect(jobs).toHaveLength(1)
-    expect(jobs[0]!.opts.repeat?.tz).toEqual('UTC')
+    // BullMQ 6 drops `repeat` from the public `JobsOptions` type, but still
+    // stores it on a job scheduler's delayed job
+    expect((jobs[0]!.opts as { repeat?: { tz?: string } }).repeat?.tz).toEqual('UTC')
     expect(jobs[0]!.opts.priority).toEqual(2)
     expect(jobs[0]!.data).toEqual({
       globalName: serviceClass.globalName,
